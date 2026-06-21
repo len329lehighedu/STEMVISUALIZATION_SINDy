@@ -26,10 +26,10 @@ def test_tab_layout(engine, trained_model_storage):
     file_input_test2 = FileInput(accept=".csv", title="Upload Test Data 2", visible=False)
 
     # =========================================================================
-    # KEY FIX: Buffer lưu base64 data trong memory, KHÔNG dùng filename
+    # KEY FIX: Buffer save base64 data in memory, not using filename
     # =========================================================================
     _upload_buffer = {
-        'test1': None,  # Lưu raw base64 string khi upload
+        'test1': None,  # Save raw base64 string when upload
         'test2': None,
     }
 
@@ -53,7 +53,7 @@ def test_tab_layout(engine, trained_model_storage):
             file_input_test1.visible = is_custom
             file_input_test2.visible = is_custom
 
-            # Reset buffer khi đổi model
+            # Reset buffer when change model
             _upload_buffer['test1'] = None
             _upload_buffer['test2'] = None
             status_div.text = "<i>Select a model to start.</i>"
@@ -68,7 +68,7 @@ def test_tab_layout(engine, trained_model_storage):
     btn_test = Button(label="▶ RUN TEST", button_type="danger", height=50)
     
     # -------------------------------------------------------------------------
-    # 2. Upload Logic — chỉ cache base64, KHÔNG đọc filename
+    # 2. Upload Logic — only cache base64, not reading filename
     # -------------------------------------------------------------------------
     def on_upload_test1(attr, old, new):
         if not new:
@@ -108,10 +108,10 @@ def test_tab_layout(engine, trained_model_storage):
     p2 = figure(title="Test Run 2", width=900, height=350, x_axis_label="Time (s)", visible=False)
 
     # -------------------------------------------------------------------------
-    # 4. Core test runner — nhận df trực tiếp thay vì csv path
+    # 4. Core test runner — use direct df instead of csv path
     # -------------------------------------------------------------------------
     def _run_single_test(fig, df, label):
-        """Run test từ DataFrame (không cần file path)."""
+        """Run test from DataFrame (no need for file path)."""
         t = df.iloc[:, 0].values
         X = df.iloc[:, 1:].values
 
@@ -146,14 +146,14 @@ def test_tab_layout(engine, trained_model_storage):
         return rows, None
 
     def _load_df_from_select(sel_value):
-        """Load DataFrame từ file trên disk (preset CSV)."""
+        """Load DataFrame from file on local machine (preset CSV)."""
         path = os.path.join('data', sel_value)
         if not os.path.exists(path):
             return None, f"File {sel_value} missing"
         return pd.read_csv(path).astype(np.float64), None
 
     def _load_df_from_buffer(b64_data):
-        """Load DataFrame từ base64 buffer (uploaded file)."""
+        """Load DataFrame from base64 buffer (uploaded file)."""
         try:
             decoded = base64.b64decode(b64_data)
             df = pd.read_csv(io.BytesIO(decoded)).astype(np.float64)
@@ -171,7 +171,7 @@ def test_tab_layout(engine, trained_model_storage):
         run_id = int(model_select.value.replace("Run #", ""))
         model_data = trained_model_storage[run_id]
 
-        # Dùng nonlocal model_instance để _run_single_test có thể truy cập
+        # Use nonlocal model_instance so _run_single_test can get access to
         nonlocal model_instance
         model_instance = model_data['model_instance']
 
@@ -206,7 +206,7 @@ def test_tab_layout(engine, trained_model_storage):
             if _upload_buffer['test2']:
                 df2, err2 = _load_df_from_buffer(_upload_buffer['test2'])
             else:
-                df2, err2 = None, None   # optional, không bắt buộc
+                df2, err2 = None, None   # optional
         else:
             df2, err2 = _load_df_from_select(file_select_2.value) \
                 if file_select_2.value != "(none)" else (None, None)
@@ -228,7 +228,7 @@ def test_tab_layout(engine, trained_model_storage):
         if not err and not err2:
             status_div.text = "<b style='color:green;'>✅ Test complete!</b>"
 
-    # Placeholder để _run_single_test có thể dùng
+    # Placeholder for _run_single_test
     model_instance = None
     btn_test.on_click(on_test_click)
 
