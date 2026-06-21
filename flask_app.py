@@ -3,7 +3,7 @@ from bokeh.embed import server_document
 
 app = Flask(__name__)
 
-# Link chuẩn đến Bokeh Server (ông check xem là /bokeh_app hay /main nhé)
+# Link to Bokeh Server 
 BOKEH_URL = "http://localhost:5006/main" 
 
 @app.route("/")
@@ -26,7 +26,7 @@ def questions():
     script = server_document(BOKEH_URL)
     return render_template("questions.html", script=script) #
 
-# Tab dashboard cũ nếu ông muốn giữ, nhưng giờ nó cũng giống các tab khác thôi
+
 @app.route("/dashboard")
 def dashboard():
     script = server_document(BOKEH_URL)
