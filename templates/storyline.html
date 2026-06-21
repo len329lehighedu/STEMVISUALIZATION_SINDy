@@ -33,7 +33,6 @@
 </div>
 
 <style>
-    /* Tổng quan container - Ép nền hoàn toàn trong suốt viết thẳng lên nền trắng của base */
     .minimal-container { 
         max-width: 1050px; 
         margin: 0 auto; 
@@ -41,7 +40,7 @@
         background: transparent;
     }
 
-    /* --- CSS Layout Chia 2 Cột cho phần Welcome --- */
+    /* --- CSS Layout divide into 2 halves --- */
     .welcome-hero-section {
         display: flex;
         align-items: flex-start;
@@ -60,7 +59,6 @@
         border: 1px solid #e9ecef;
     }
 
-    /* Tiêu đề sạch sẽ */
     .minimal-title {
         font-size: 28px;
         color: #2c3e50;
@@ -76,7 +74,7 @@
         margin-bottom: 18px;
     }
 
-    /* Nút cuộn nhanh mượt mà */
+    /* jump to module button */
     .jump-btn {
         display: inline-block;
         margin-top: 15px;
@@ -93,7 +91,7 @@
         background-color: #34495e;
     }
 
-    /* --- Sơ đồ khối SINDy Flow bằng CSS tinh tế --- */
+    /* --- SINDy Flow graph --- */
     .sindy-flow-diagram {
         display: flex;
         flex-direction: column;
@@ -124,11 +122,11 @@
     .flow-arrow {
         font-size: 18px;
         color: #95a5a6;
-        transform: rotate(90deg); /* Biến mũi tên ngang thành dọc cho gọn cột */
+        transform: rotate(90deg); /* rotate arrow from horizontal to vertical */
         margin: 2px 0;
     }
 
-    /* Định dạng các phần dưới */
+    
     .content-section { margin-bottom: 50px; }
     .separator {
         border: none;
