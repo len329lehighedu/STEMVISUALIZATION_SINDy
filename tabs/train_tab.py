@@ -21,17 +21,17 @@ def train_tab_layout(engine, trained_model_storage):
             n_vars = X.shape[1]
             dt     = np.mean(np.diff(t)) if len(t) > 1 else 0.1
 
-            # ── 1. Tính derivative sạch hơn ──────────────────────────────
-            # Dùng Savitzky-Golay thay vì moving average — ít méo hơn
+            # ── 1. Calculate derivative ──────────────────────────────
+            # use Savitzky-Golay 
             from scipy.signal import savgol_filter
             dXdt = np.zeros_like(X)
-            window = min(11, len(t) // 10 * 2 + 1)  # window lẻ, tối đa 11
+            window = min(11, len(t) // 10 * 2 + 1) 
             window = max(window, 5)
             for i in range(n_vars):
                 smoothed = savgol_filter(X[:, i], window_length=window, polyorder=3)
                 dXdt[:, i] = np.gradient(smoothed, dt)
 
-            # ── 2. So sánh R² của degree 1, 2, 3 ────────────────────────
+            # ── 2. Compare R² of degree 1, 2, 3 ────────────────────────
             from sklearn.preprocessing import PolynomialFeatures
             from sklearn.linear_model import LinearRegression
             from sklearn.metrics import r2_score
@@ -48,22 +48,22 @@ def train_tab_layout(engine, trained_model_storage):
             r2_deg2   = r2_scores[2]
             r2_deg3   = r2_scores[3]
 
-            # ── 3. Chọn degree tối thiểu đạt ngưỡng R² ──────────────────
-            # Nếu degree=1 đã đủ tốt → linear system
+            # ── 3. Choose minimal degree that satisfy R² ──────────────────
+            # If degree=1 is sufficient → linear system
             if r2_linear >= 0.85:
                 sug_degree = 1
                 reason_deg = f"Linear fit R²={r2_linear:.3f} ≥ 0.85 → degree=1"
-            # Nếu degree=2 cải thiện đáng kể so với degree=1
+            # If degree=2 is significantly larger than degree=1
             elif r2_deg2 - r2_linear >= 0.05:
                 sug_degree = 2
                 reason_deg = (f"Degree=2 R²={r2_deg2:.3f} improves over "
                               f"linear R²={r2_linear:.3f} by {r2_deg2 - r2_linear:.3f} → degree=2")
-            # Nếu degree=3 cải thiện đáng kể so với degree=2
+            # If degree=3 is significantly larger than degree=2
             elif r2_deg3 - r2_deg2 >= 0.05:
                 sug_degree = 3
                 reason_deg = (f"Degree=3 R²={r2_deg3:.3f} improves over "
                               f"degree=2 R²={r2_deg2:.3f} by {r2_deg3 - r2_deg2:.3f} → degree=3")
-            # Không có cải thiện rõ ràng → giữ linear
+            # No significant difference → linear
             else:
                 sug_degree = 1
                 reason_deg = (f"No significant improvement beyond linear "
@@ -95,7 +95,7 @@ def train_tab_layout(engine, trained_model_storage):
             else:
                 sug_threshold = 0.20
 
-            # ── 6. Quyết định library ────────────────────────────────────
+            # ── 6. Library (Currently not used) ────────────────────────────────────
             if is_periodic and r2_linear < 0.92:
                 sug_library = "Combined"
                 reason_lib  = "Periodic signal + nonlinear → Try Polynomial/Fourier/"
@@ -146,7 +146,7 @@ def train_tab_layout(engine, trained_model_storage):
             path = os.path.join('data', new)
             if os.path.exists(path):
                 df = pd.read_csv(path).astype(np.float64)
-                # Kích hoạt AI Suggester ngay khi click chọn file pre-set
+                # Activate suggestion function when choose preset system
                 apply_suggestion(df, f"✅ Selected system file: <b>{new}</b>")
             else:
                 upload_status.text = f"⚠ Pre-set file not found at {path}"
@@ -172,7 +172,7 @@ def train_tab_layout(engine, trained_model_storage):
                             options=["Polynomial", "Fourier", "Combined"],
                             value="Polynomial")
 
-    # 2 slider Train / Val 
+    # 2 slider Train / Validation
     train_s = Slider(start=10, end=90, value=60, step=5,
                      title="Train - Validation Split")
  
