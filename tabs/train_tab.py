@@ -232,6 +232,13 @@ def train_tab_layout(engine, trained_model_storage):
         index_position=None, background="#ffffff",
         sortable=True, selectable=True,
     )
+    def on_row_select(attr, old, new):
+        if not new:
+            return
+        run_id = source_history.data['run'][new[0]]
+        if run_id in trained_model_storage:
+            render_plot(run_id)
+    source_history.selected.on_change('indices', on_row_select)
 
     # -------------------------------------------------------------------------
     # 3. Plot
@@ -246,6 +253,36 @@ def train_tab_layout(engine, trained_model_storage):
     )
 
     counter = [0]
+    view_div = Div(
+            text="",
+            styles={'color': '#7f8c8d', 'font-size': '13px', 'padding': '4px 0'}
+        )
+
+    def render_plot(run_id): # rewrite plotting function to allow user see the plot when press on any run
+        """Redraw plot from stored plot_data of a given run."""
+        data = trained_model_storage[run_id]['plot_data']
+        t, X         = data['t'], data['X']
+        train_idx    = data['train_idx']
+        val_idx      = data['val_idx']
+        x_sim_full   = data['x_sim']
+
+        p.renderers = []
+        if p.legend:
+            p.legend.items = []
+        # Train points in BLUE
+        p.scatter(t[train_idx], X[train_idx, 0],
+                color="#1f77b4", alpha=0.4, size=4, legend_label="Train points")
+        # Validation points in ORANGE
+        p.scatter(t[val_idx], X[val_idx, 0],
+                color="#ff7f0e", alpha=0.4, size=4, legend_label="Val points")
+        if x_sim_full is not None:
+            p.line(t, x_sim_full[:, 0],
+                color="#2ecc71", line_width=2.5, legend_label="SINDy found")
+
+        p.legend.click_policy = "hide"
+        p.legend.location     = "top_right"
+        p.title.text = f"Model Result — Run #{run_id}"
+        view_div.text = f"<b style='color:#2c3e50;'>👁 Viewing Run #{run_id}</b>"
 
     # -------------------------------------------------------------------------
     # 4. Callback
@@ -350,32 +387,39 @@ def train_tab_layout(engine, trained_model_storage):
                 'val_r2':     v_r2,
             },
             'equations': raw_eqs,
+            'plot_data': {
+            't':         t,
+            'X':         X,
+            'train_idx': train_idx,
+            'val_idx':   val_idx,
+            'x_sim':     x_sim_full,
+            },
         }
+        render_plot(counter[0])
+        # # Plot — scatter train/val points, line = SINDy simulation
+        # p.renderers  = []
+        # # instead of call directly p.legend.items = []
+        # if p.legend:
+        #     p.legend.items = []
 
-        # Plot — scatter train/val points, line = SINDy simulation
-        p.renderers  = []
-        # instead of call directly p.legend.items = []
-        if p.legend:
-            p.legend.items = []
+        # # Train points (blue scatter)
+        # p.scatter(t[train_idx], X[train_idx, 0],
+        #           color="#1f77b4", alpha=0.4, size=4,
+        #           legend_label="Train points")
 
-        # Train points (blue scatter)
-        p.scatter(t[train_idx], X[train_idx, 0],
-                  color="#1f77b4", alpha=0.4, size=4,
-                  legend_label="Train points")
+        # # Validation points (orange scatter)
+        # p.scatter(t[val_idx], X[val_idx, 0],
+        #           color="#ff7f0e", alpha=0.4, size=4,
+        #           legend_label="Val points")
 
-        # Validation points (orange scatter)
-        p.scatter(t[val_idx], X[val_idx, 0],
-                  color="#ff7f0e", alpha=0.4, size=4,
-                  legend_label="Val points")
+        # # SINDy simulation line on all t
+        # if x_sim_full is not None:
+        #     p.line(t, x_sim_full[:, 0],
+        #            color="#2ecc71", line_width=2.5,
+        #            legend_label="SINDy found")
 
-        # SINDy simulation line on all t
-        if x_sim_full is not None:
-            p.line(t, x_sim_full[:, 0],
-                   color="#2ecc71", line_width=2.5,
-                   legend_label="SINDy found")
-
-        p.legend.click_policy = "hide"
-        p.legend.location     = "top_right"
+        # p.legend.click_policy = "hide"
+        # p.legend.location     = "top_right"
 
         # res_div.text = (
         #     f"<div style='color:#2c3e50;'>"
@@ -400,7 +444,7 @@ def train_tab_layout(engine, trained_model_storage):
     top_row = row(
         column(file_select,file_input, upload_status, train_s, split_div,library_select,
                poly_s, thr_s, btn_train, width=320),
-        column(p)
+        column(p,view_div)
     )
 
     return column(
