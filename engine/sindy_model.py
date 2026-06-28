@@ -162,6 +162,58 @@ class SINDyEngine:
         r2   = float(r2_score(X_true, X_pred, multioutput='uniform_average'))
         return {'mse': float(mse), 'rmse': rmse, 'mae': mae, 'r2': r2}
     
+    def _estimate_lyapunov(self, X, t):
+        """
+        Estimate the largest Lyapunov exponent (λ) from observed trajectory data.
+
+        Core idea:
+            In a chaotic system, two initially close trajectories diverge exponentially.
+            λ measures the average rate of that divergence:
+                λ = mean( log(d1 / d0) / dt )
+            where d0 is the initial distance between two neighbors,
+            and d1 is their distance one timestep later.
+
+            λ > 0  → trajectories diverge → system is chaotic
+            λ ≤ 0  → trajectories converge or stay close → system is stable
+
+        Algorithm (Kantz / Rosenstein simplified):
+            1. Sample ~50 reference points along the trajectory
+            2. For each reference point i, find its nearest neighbor j
+            (excluding temporal neighbors within a window to avoid trivial pairs)
+            3. Compute d0 = ||X[i] - X[j]||  (initial separation)
+            4. Compute d1 = ||X[i+1] - X[j+1]||  (separation one step later)
+            5. Local exponent = log(d1 / d0) / dt
+            6. λ = mean of all local exponents
+
+        Limitations:
+            - Requires sufficiently long, low-noise trajectory
+            - Short or noisy data will produce unreliable estimates
+            - This is a rough estimate, not a rigorous Lyapunov calculation
+        """
+        n  = len(t)
+        dt = float(np.mean(np.diff(t)))
+        exponents = []
+
+        for i in range(0, n - 1, max(1, n // 50)):  # sample ~50 reference points
+            # Find nearest neighbor in state space (not in time)
+            dists = np.linalg.norm(X - X[i], axis=1)
+
+            # Exclude temporal neighbors to avoid trivially close pairs
+            dists[max(0, i - 5): i + 5] = np.inf
+
+            j  = np.argmin(dists)
+            d0 = dists[j]
+            if d0 < 1e-10:
+                continue  # skip degenerate pairs (identical points)
+
+            # Measure divergence one timestep later
+            if i + 1 < n and j + 1 < n:
+                d1 = np.linalg.norm(X[i + 1] - X[j + 1])
+                if d1 > 0 and d0 > 0:
+                    exponents.append(np.log(d1 / d0) / dt)
+
+        return float(np.mean(exponents)) if exponents else 0.0
+    
     def analyze_residual(self, X, t):
         """
         Diagnose SINDy fit quality by analyzing the residual:
