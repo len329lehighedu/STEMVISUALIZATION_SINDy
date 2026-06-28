@@ -164,8 +164,40 @@ class SINDyEngine:
     
     def analyze_residual(self, X, t):
         """
-        Analyze residual after fit
-        Return a dict contains failure_type + signals for UI
+        Diagnose SINDy fit quality by analyzing the residual:
+            residual = dX_true - dX_predicted
+
+        If the model were perfect, residual would be pure white noise.
+        Any structure remaining in the residual means the model missed something.
+
+        Three diagnostic signals are computed per state variable:
+
+        1. SNR (Signal-to-Noise Ratio, in dB)
+        Measures how much of the derivative's energy the model explains.
+            signal_power = var(dX_true)   → total variance in the true derivative
+            noise_power  = var(residual)  → variance the model failed to explain
+            SNR = 10 * log10(signal_power / noise_power)
+        Low SNR (<10 dB) → residual is almost as large as the signal itself
+        → data is too noisy, or the model is fundamentally wrong.
+
+        2. Lag-1 Autocorrelation of residual
+        Measures correlation between residual[t] and residual[t+1].
+        Pure noise has autocorr ≈ 0 (each point is independent).
+        A large autocorr means the residual has a repeating pattern
+        → a term exists in the true dynamics that the library never offered.
+        
+        3. Correlation of residual with each state variable Xi
+        If corr(residual, Xi) is high → SINDy underused Xi in its equations,
+        more terms involving Xi should be added to the library.
+        If residual has NO significant correlation with any measured variable
+        → the leftover dynamics cannot be explained by anything we observed
+        → strong signal of a hidden / unobserved variable.
+
+        Failure classification (in order of priority):
+            DATA_QUALITY      : SNR < 10 dB
+            LIBRARY_TOO_SIMPLE: abs(autocorr) > 0.5  (structured residual)
+            HIDDEN_VARIABLE   : max_corr < 0.2       (residual unexplainable by any Xi)
+            OK                : none of the above
         """
         if self.model is None:
             return None
@@ -179,16 +211,19 @@ class SINDyEngine:
             r = residual[:, i]
             name = self.feature_names[i] if self.feature_names else f"x{i}"
 
-            # 1. Noise level — SNR
+            # --- Signal 1: SNR ---
             signal_power = np.var(dX_true[:, i])
             noise_power  = np.var(r)
             snr_db = 10 * np.log10(signal_power / noise_power) if noise_power > 0 else 99
 
-            # 2. Residual has structure or not? — autocorrelation lag-1
+            # --- Signal 2: Lag-1 autocorrelation ---
+            # Subtract mean first so we measure correlation of fluctuations, not offset
             r_norm = r - r.mean()
             autocorr = float(np.corrcoef(r_norm[:-1], r_norm[1:])[0, 1])
 
-            # 3. Residual correlate with?
+            # --- Signal 3: Correlation with each observed state variable ---
+            # High correlation → library is missing terms that involve that variable
+            # Near-zero for all → residual is unexplainable → suspect hidden variable
             max_corr = 0.0
             max_corr_var = None
             for j in range(X.shape[1]):
@@ -199,7 +234,7 @@ class SINDyEngine:
 
             r2_var = float(1 - noise_power / signal_power) if signal_power > 0 else 0
             
-            # 4. Classify failure
+            # --- Classify ---
             if snr_db < 10:
                 failure = "DATA_QUALITY"
             elif abs(autocorr) > 0.6 and r2_var < 0.85:
