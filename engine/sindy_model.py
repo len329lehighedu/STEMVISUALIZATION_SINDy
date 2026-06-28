@@ -224,84 +224,107 @@ class SINDyEngine:
 
         Three diagnostic signals are computed per state variable:
 
-        1. SNR (Signal-to-Noise Ratio, in dB)
-        Measures how much of the derivative's energy the model explains.
-            signal_power = var(dX_true)   → total variance in the true derivative
-            noise_power  = var(residual)  → variance the model failed to explain
+        1. R² in derivative space (r2_dx)
+        Measures how much of the derivative variance the model explains.
+        Used as the primary gate: if r2_dx is high, the model fit is good
+        in derivative space — failure is then about simulation stability,
+        not about the library or data quality.
+
+        2. SNR (Signal-to-Noise Ratio, in dB)
+        Measures how much of the derivative energy the model explains
+        relative to what it failed to explain.
+            signal_power = var(dX_true)
+            noise_power  = var(residual)
             SNR = 10 * log10(signal_power / noise_power)
-        Low SNR (<10 dB) → residual is almost as large as the signal itself
-        → data is too noisy, or the model is fundamentally wrong.
+        Low SNR → residual energy is close to signal energy → data too noisy.
 
-        2. Lag-1 Autocorrelation of residual
-        Measures correlation between residual[t] and residual[t+1].
-        Pure noise has autocorr ≈ 0 (each point is independent).
-        A large autocorr means the residual has a repeating pattern
-        → a term exists in the true dynamics that the library never offered.
-        
-        3. Correlation of residual with each state variable Xi
-        If corr(residual, Xi) is high → SINDy underused Xi in its equations,
-        more terms involving Xi should be added to the library.
-        If residual has NO significant correlation with any measured variable
-        → the leftover dynamics cannot be explained by anything we observed
-        → strong signal of a hidden / unobserved variable.
+        3. Lag-1 Autocorrelation of residual
+        Pure noise has autocorr ≈ 0 (each timestep is independent).
+        A large autocorr means the residual has a repeating pattern →
+        a term exists in the true dynamics that the library never offered.
 
-        Failure classification (in order of priority):
-            DATA_QUALITY      : SNR < 10 dB
-            LIBRARY_TOO_SIMPLE: abs(autocorr) > 0.5  (structured residual)
-            HIDDEN_VARIABLE   : max_corr < 0.2       (residual unexplainable by any Xi)
-            OK                : none of the above
+        Failure classification (priority order):
+            R² ≥ 0.85 + λ > 0.05  →  CHAOTIC_SYSTEM
+                Model found good equations, but the system is inherently chaotic.
+                Trajectory divergence is mathematical, not a model error.
+
+            R² ≥ 0.85 + λ ≤ 0.05  →  OK
+                Model fits well and system is stable.
+
+            SNR < 10 dB            →  DATA_QUALITY
+                Data is too noisy to draw further conclusions.
+
+            autocorr > 0.4         →  LIBRARY_TOO_SIMPLE
+                Residual still has structure → library is missing terms.
+
+            else                   →  UNDERFITTING
+                R² is low but no clear pattern in residual →
+                sparsity threshold is likely too aggressive.
         """
         if self.model is None:
             return None
 
-        dX_true = self.compute_derivatives(X, t)
-        dX_pred = self.model.predict(X)
+        dX_true  = self.compute_derivatives(X, t)
+        dX_pred  = self.model.predict(X)
         residual = dX_true - dX_pred  # shape: (n_samples, n_features)
+
+        # Estimate Lyapunov exponent once for the full trajectory
+        # (system-level property, not per-variable)
+        lyap = self._estimate_lyapunov(X, t)
 
         results = {}
         for i in range(residual.shape[1]):
-            r = residual[:, i]
+            r    = residual[:, i]
             name = self.feature_names[i] if self.feature_names else f"x{i}"
 
-            # --- Signal 1: SNR ---
+            # --- Signal 1: R² in derivative space ---
+            # Fraction of derivative variance explained by the model.
+            # Primary gate for the classifier — checked before anything else.
             signal_power = np.var(dX_true[:, i])
             noise_power  = np.var(r)
-            snr_db = 10 * np.log10(signal_power / noise_power) if noise_power > 0 else 99
+            r2_dx = float(1 - noise_power / signal_power) if signal_power > 0 else 0.0
 
-            # --- Signal 2: Lag-1 autocorrelation ---
-            # Subtract mean first so we measure correlation of fluctuations, not offset
-            r_norm = r - r.mean()
+            # --- Signal 2: SNR (dB) ---
+            # How large is the unexplained residual relative to the true signal?
+            # Low SNR → data itself is too noisy, not a library problem.
+            snr_db = 10 * np.log10(signal_power / noise_power) if noise_power > 0 else 99.0
+
+            # --- Signal 3: Lag-1 autocorrelation of residual ---
+            # Subtract mean so we measure correlation of fluctuations, not offset.
+            # High autocorr → residual has temporal structure → missing library terms.
+            r_norm   = r - r.mean()
             autocorr = float(np.corrcoef(r_norm[:-1], r_norm[1:])[0, 1])
 
-            # --- Signal 3: Correlation with each observed state variable ---
-            # High correlation → library is missing terms that involve that variable
-            # Near-zero for all → residual is unexplainable → suspect hidden variable
-            max_corr = 0.0
-            max_corr_var = None
-            for j in range(X.shape[1]):
-                c = abs(float(np.corrcoef(r, X[:, j])[0, 1]))
-                if c > max_corr:
-                    max_corr = c
-                    max_corr_var = self.feature_names[j] if self.feature_names else f"x{j}"
+            # --- Priority-based classifier ---
+            if r2_dx >= 0.85:
+                # Model explains derivative space well.
+                # Only remaining question: is the system chaotic?
+                if lyap > 0.05:
+                    failure = "CHAOTIC_SYSTEM"
+                else:
+                    failure = "OK"
 
-            r2_var = float(1 - noise_power / signal_power) if signal_power > 0 else 0
-            
-            # --- Classify ---
-            if snr_db < 10:
+            elif snr_db < 10:
+                # Residual energy is close to signal energy.
+                # Data is too noisy — no further diagnosis is reliable.
                 failure = "DATA_QUALITY"
-            elif abs(autocorr) > 0.6 and r2_var < 0.85:
+
+            elif abs(autocorr) > 0.4:
+                # Residual still has repeating structure despite low R².
+                # The library is missing terms that could explain this pattern.
                 failure = "LIBRARY_TOO_SIMPLE"
-            elif max_corr < 0.2 and abs(autocorr) > 0.4:
-                failure = "HIDDEN_VARIABLE"
+
             else:
-                failure = "OK"
+                # R² is low but residual looks like noise — no clear structure.
+                # Most likely cause: sparsity threshold pruned valid terms.
+                failure = "UNDERFITTING"
 
             results[name] = {
-                'snr_db':       round(snr_db, 2),
-                'autocorr':     round(autocorr, 3),
-                'max_corr':     round(max_corr, 3),
-                'max_corr_var': max_corr_var,
-                'failure':      failure,
+                'r2_dx':   round(r2_dx,   3),
+                'snr_db':  round(snr_db,  2),
+                'autocorr': round(autocorr, 3),
+                'lyap':    round(lyap,    4),
+                'failure': failure,
             }
 
         return results
