@@ -161,6 +161,7 @@ class SINDyEngine:
         mae  = float(mean_absolute_error(X_true, X_pred))
         r2   = float(r2_score(X_true, X_pred, multioutput='uniform_average'))
         return {'mse': float(mse), 'rmse': rmse, 'mae': mae, 'r2': r2}
+    
     def analyze_residual(self, X, t):
         """
         Analyze residual after fit
@@ -196,12 +197,14 @@ class SINDyEngine:
                     max_corr = c
                     max_corr_var = self.feature_names[j] if self.feature_names else f"x{j}"
 
+            r2_var = float(1 - noise_power / signal_power) if signal_power > 0 else 0
+            
             # 4. Classify failure
             if snr_db < 10:
                 failure = "DATA_QUALITY"
-            elif abs(autocorr) > 0.5:
+            elif abs(autocorr) > 0.6 and r2_var < 0.85:
                 failure = "LIBRARY_TOO_SIMPLE"
-            elif max_corr < 0.2:
+            elif max_corr < 0.2 and abs(autocorr) > 0.4:
                 failure = "HIDDEN_VARIABLE"
             else:
                 failure = "OK"
