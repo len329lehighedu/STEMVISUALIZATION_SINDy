@@ -234,13 +234,18 @@ def train_tab_layout(engine, trained_model_storage):
     )
     btn_delete = Button(label="🗑 Delete Selected Run", 
                     button_type="danger", width=200)
+    
     def on_row_select(attr, old, new):
         if not new:
             return
         run_id = source_history.data['run'][new[0]]
         if run_id in trained_model_storage:
             render_plot(run_id)
+            diag = trained_model_storage[run_id].get('diagnostics')
+            if diag:
+                _render_diag_plots(diag)
     source_history.selected.on_change('indices', on_row_select)
+    
 
     # -------------------------------------------------------------------------
     # 3. Plot
@@ -255,7 +260,39 @@ def train_tab_layout(engine, trained_model_storage):
         styles={'background': '#f8f9fa', 'padding': '10px', 'border-radius': '5px'}
     )
 
-
+    # ── Diagnostic Plots (shown above history table) ──────────────────────
+    # Plot 1: Residual vs Time
+    # Researcher checks for temporal structure — random = good, pattern = missing terms
+    p_resid = figure(
+        title="Residual vs Time",
+        width=380, height=280,
+        x_axis_label="Time", y_axis_label="Residual",
+        toolbar_location=None,
+    )
+    p_resid.scatter([], [], alpha=0)
+    # Plot 2: FFT of Residual
+    # Dominant frequency peak → missing periodic term in library
+    p_fft = figure(
+        title="Residual FFT (Frequency Content)",
+        width=380, height=280,
+        x_axis_label="Frequency (Hz)", y_axis_label="Amplitude",
+        toolbar_location=None,
+    )
+    p_fft.scatter([], [], alpha=0)
+    # Plot 3: dX_true vs dX_predicted scatter
+    # Perfect fit → all points on y=x diagonal
+    p_scatter = figure(
+        title="dX True vs dX Predicted",
+        width=380, height=280,
+        x_axis_label="dX Predicted", y_axis_label="dX True",
+        toolbar_location=None,
+    )
+    p_scatter.scatter([], [], alpha=0)
+    # Stats text shown above the 3 plots
+    diag_stats_div = Div(
+        text="<i>Run a training session to see diagnostics.</i>",
+        styles={'padding': '6px', 'font-family': 'monospace', 'font-size': '12px'}
+    )
     counter = [0]
     view_div = Div(
             text="",
@@ -288,6 +325,105 @@ def train_tab_layout(engine, trained_model_storage):
         p.title.text = f"Model Result — Run #{run_id}"
         view_div.text = f"<b style='color:#2c3e50;'>👁 Viewing Run #{run_id}</b>"
         
+    
+    # Palette for multi-variable plots
+    _DIAG_COLORS = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd"]
+
+    def _render_diag_plots(diag):
+        """
+        Populate the 3 diagnostic plots from a diagnostics dict.
+
+        For the FFT plot specifically, we auto-scale the x-axis to the
+        frequency range that contains meaningful energy. This avoids two problems:
+        1. Hardcoded ranges that only work for one specific system
+        2. Showing the full Nyquist range where most content is noise floor,
+            making real peaks hard to see
+        """
+        if not diag:
+            return
+
+        # Clear all 3 plots
+        p_resid.renderers   = []
+        p_fft.renderers     = []
+        p_scatter.renderers = []
+        if p_resid.legend:   p_resid.legend.items   = []
+        if p_fft.legend:     p_fft.legend.items     = []
+        if p_scatter.legend: p_scatter.legend.items = []
+
+        var_names = list(diag['residuals'].keys())
+        freqs     = diag['fft_freqs']
+
+        for idx, name in enumerate(var_names):
+            color = _DIAG_COLORS[idx % len(_DIAG_COLORS)]
+
+            # Plot 1 — Residual vs Time
+            p_resid.line(
+                diag['t'], diag['residuals'][name],
+                color=color, line_width=1.5, alpha=0.8,
+                legend_label=name,
+            )
+
+            # Plot 2 — FFT amplitude spectrum
+            p_fft.line(
+                freqs, diag['fft_amps'][name],
+                color=color, line_width=1.5, alpha=0.8,
+                legend_label=name,
+            )
+
+            # Plot 3 — dX_true vs dX_pred scatter
+            p_scatter.scatter(
+                diag['dX_pred'][name], diag['dX_true'][name],
+                color=color, alpha=0.3, size=4,
+                legend_label=name,
+            )
+
+        # ── Auto-scale FFT x-axis ──────────────────────────────────────────
+        # Combine amplitude across all variables to find the global energy envelope.
+        # We want to show only the frequency range where at least one variable
+        # has meaningful energy (> 1% of the global peak amplitude).
+        # This works for any system — slow biological oscillators, fast mechanical
+        # systems, chaotic attractors — without any hardcoded frequency limit.
+        all_amps = np.concatenate([diag['fft_amps'][n] for n in var_names])
+        max_amp  = float(all_amps.max())
+
+        if max_amp > 0:
+            # Find the highest frequency index where energy is still significant
+            significant_indices = np.where(all_amps > 0.01 * max_amp)[0]
+
+            if len(significant_indices) > 0:
+                # Map flat index back to frequency axis
+                # all_amps is a concatenation of n_vars arrays each of length n_freqs
+                n_freqs   = len(freqs)
+                last_idx  = int(significant_indices[-1]) % n_freqs
+                f_max     = float(freqs[last_idx])
+
+                # Add 20% margin so the last peak is not cut off at the edge
+                p_fft.x_range.end   = f_max * 1.2
+                p_fft.x_range.start = 0.0
+
+        # Add y=x reference line to Plot 3 (ideal fit diagonal)
+        all_vals = np.concatenate([diag['dX_true'][n] for n in var_names])
+        vmin, vmax = float(all_vals.min()), float(all_vals.max())
+        p_scatter.line(
+            [vmin, vmax], [vmin, vmax],
+            color="#e74c3c", line_width=1.5, line_dash="dashed",
+            legend_label="ideal (y=x)",
+        )
+
+        for fig in [p_resid, p_fft, p_scatter]:
+            fig.legend.click_policy = "hide"
+            fig.legend.location     = "top_right"
+
+        # Stats: one line per variable for readability
+        stats_html = "<b>Residual Stats:</b><br>"
+        for name, s in diag['stats'].items():
+            stats_html += (
+                f"&nbsp;&nbsp;<b>{name}</b>: "
+                f"R²(dX)={s['r2_dx']} | "
+                f"SNR={s['snr_db']} dB | "
+                f"autocorr={s['autocorr']}<br>"
+            )
+        diag_stats_div.text = stats_html
 
 
     # -------------------------------------------------------------------------
@@ -338,10 +474,12 @@ def train_tab_layout(engine, trained_model_storage):
                     train_frac   = train_frac,
                     random_seed  = counter[0] * 7,  # different seed each run
                 )
+
         except Exception as e:
             res_div.text = f"<span style='color:red;'>⚠ Fit error: {e}</span>"
             return
 
+        diag = engine.compute_diagnostics(X, t)
         t_r2   = m_train['r2'];   t_rmse = m_train['rmse']; t_mae = m_train['mae']
         v_r2   = m_val['r2'];     v_rmse = m_val['rmse'];   v_mae = m_val['mae']
         rmse_diff = float(np.abs(t_rmse - v_rmse))
@@ -400,8 +538,10 @@ def train_tab_layout(engine, trained_model_storage):
             'val_idx':   val_idx,
             'x_sim':     x_sim_full,
             },
+            'diagnostics': diag,
         }
         render_plot(counter[0])
+        _render_diag_plots(diag)
 
     def on_delete_click():
         selected = source_history.selected.indices
@@ -411,22 +551,30 @@ def train_tab_layout(engine, trained_model_storage):
         idx    = selected[0]
         run_id = source_history.data['run'][idx]
         
-        # Xóa khỏi storage
+        # delete from storage
         if run_id in trained_model_storage:
             del trained_model_storage[run_id]
         
-        # Xóa khỏi DataTable — rebuild toàn bộ data dict
+        # delete from DataTable — rebuild all data dict
         new_data = {k: [v for i, v in enumerate(vals) if i != idx]
                     for k, vals in source_history.data.items()}
         source_history.data = new_data
         source_history.selected.indices = []
         
-        # Nếu đang view run bị xóa → clear plot
+        # if current view run is delete → clear plot
         if view_div.text and f"Run #{run_id}" in view_div.text:
             p.renderers = []
             if p.legend: p.legend.items = []
             p.title.text = "Model Result"
             view_div.text = ""
+        for figs in [p_resid, p_fft, p_scatter]:
+            figs.renderers = []
+            if figs.legend and len(figs.legend) > 0:
+                figs.legend[0].items = []
+        # Reset stats text and FFT x-axis range
+        diag_stats_div.text = "<i>Run a training session to see diagnostics.</i>"
+        p_fft.x_range.start = 0.0
+        p_fft.x_range.end   = 1.0  # reset to neutral — will be auto-scaled on next run
 
     btn_delete.on_click(on_delete_click)
     
@@ -451,7 +599,9 @@ def train_tab_layout(engine, trained_model_storage):
 
     return column(
         top_row,
+        Div(text="<hr><b>RESIDUAL DIAGNOSTICS</b>"),
+        diag_stats_div,
+        row(p_resid, p_fft, p_scatter),
         Div(text="<hr><b>TRAINING HISTORY — Metrics on dx/dt (derivative space)</b>"),
-        diagnosis_div,
         row(history_table,btn_delete),
     )
