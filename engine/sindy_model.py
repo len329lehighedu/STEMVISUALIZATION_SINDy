@@ -162,4 +162,73 @@ class SINDyEngine:
         r2   = float(r2_score(X_true, X_pred, multioutput='uniform_average'))
         return {'mse': float(mse), 'rmse': rmse, 'mae': mae, 'r2': r2}
     
-    
+    def compute_diagnostics(self, X, t):
+        """
+        Compute raw diagnostic data for residual analysis after a SINDy fit.
+        Returns data arrays for 3 plots — no classification, no thresholds.
+        The researcher reads the plots and draws their own conclusions.
+
+        Returns a dict with:
+            't'           : time array (shared x-axis for Plot 1)
+            'residuals'   : dict {var_name: residual array}  → Plot 1 (Residual vs Time)
+            'fft_freqs'   : frequency array (shared x-axis for Plot 2)
+            'fft_amps'    : dict {var_name: FFT amplitude}   → Plot 2 (Residual FFT)
+            'dX_true'     : dict {var_name: true derivative} → Plot 3 (dX_true vs dX_pred)
+            'dX_pred'     : dict {var_name: pred derivative} → Plot 3
+            'stats'       : dict {var_name: {snr_db, autocorr, r2_dx}} → shown as text
+        """
+        if self.model is None:
+            return None
+
+        dX_true  = self.compute_derivatives(X, t)
+        dX_pred  = self.model.predict(X)
+        residual = dX_true - dX_pred  # shape: (n_samples, n_features)
+
+        n  = len(t)
+        dt = float(np.mean(np.diff(t)))
+
+        # FFT frequency axis — same for all variables
+        fft_freqs = np.fft.rfftfreq(n, d=dt)
+
+        result = {
+            't':         t,
+            'residuals': {},
+            'fft_freqs': fft_freqs,
+            'fft_amps':  {},
+            'dX_true':   {},
+            'dX_pred':   {},
+            'stats':     {},
+        }
+
+        for i in range(residual.shape[1]):
+            r    = residual[:, i]
+            name = self.feature_names[i] if self.feature_names else f"x{i}"
+
+            # --- Plot 1: Residual vs Time ---
+            result['residuals'][name] = r
+
+            # --- Plot 2: FFT of residual ---
+            # Amplitude spectrum — dominant frequency reveals missing periodic terms
+            fft_amp = np.abs(np.fft.rfft(r)) / n
+            result['fft_amps'][name] = fft_amp
+
+            # --- Plot 3: dX_true vs dX_pred scatter ---
+            # Perfect model → all points on y=x diagonal
+            result['dX_true'][name] = dX_true[:, i]
+            result['dX_pred'][name] = dX_pred[:, i]
+
+            # --- Stats shown as text (no classification) ---
+            signal_power = np.var(dX_true[:, i])
+            noise_power  = np.var(r)
+            r2_dx   = float(1 - noise_power / signal_power) if signal_power > 0 else 0.0
+            snr_db  = 10 * np.log10(signal_power / noise_power) if noise_power > 0 else 99.0
+            r_norm  = r - r.mean()
+            autocorr = float(np.corrcoef(r_norm[:-1], r_norm[1:])[0, 1])
+
+            result['stats'][name] = {
+                'r2_dx':    round(r2_dx,   3),
+                'snr_db':   round(snr_db,  2),
+                'autocorr': round(autocorr, 3),
+            }
+
+        return result
