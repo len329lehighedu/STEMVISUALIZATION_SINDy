@@ -97,8 +97,8 @@ SINDy/
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/your-username/sindy-viz.git
-cd sindy-viz
+git clone https://github.com/len329lehighedu/STEM-VISUALIZATION---SINDy.git
+cd STEM-VISUALIZATION---SINDy
 
 # 2. Create a virtual environment
 python -m venv venv
@@ -124,12 +124,12 @@ pandas
 ## ▶️ Running the App
 
 ```bash
-bokeh serve --allow-websocket-origin=127.0.0.1:8080 SINDy/
+bokeh serve --allow-websocket-origin=127.0.0.1:8080 main.py
 ```
 
 Then open your browser at:
 ```
-http://127.0.0.1:8080/SINDy
+http://127.0.0.1:8080
 ```
 
 ---
@@ -152,7 +152,7 @@ t,       x1,      x2,      ...
 ---
 
 ## 🧬 Supported Systems (Pre-set)
-
+The purpose of these two pre-set systems is to show SINDy's ability to retrieve equation from data.
 | System | Variables | Dynamics |
 |--------|-----------|----------|
 | Coupled Spring-Mass | x1, v1, x2, v2 | Linear, oscillatory |
