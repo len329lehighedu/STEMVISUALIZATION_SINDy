@@ -1,4 +1,4 @@
-# 🔬 Lehigh University Impact Fellowship - STEM VISUALIZATION - SINDy Module
+# 🔬 Lehigh University Impact Fellowship - [STEM VISUALIZATION](https://srrweb.cc.lehigh.edu/app/) - SINDy Module
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white"/>
@@ -202,7 +202,7 @@ dv/dt = μ(1 − x²)v − x        (μ = 1)
 
 ---
 
-## ��️ Design Philosophy
+## � Design Philosophy
 
 > *"A tool that shows you what it found is useful. A tool that shows you why it found it — and what it might have missed — is a research instrument."*
 
