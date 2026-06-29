@@ -254,8 +254,7 @@ def train_tab_layout(engine, trained_model_storage):
         text="<h3>Run Equations:</h3>",
         styles={'background': '#f8f9fa', 'padding': '10px', 'border-radius': '5px'}
     )
-    # div for residual analysis/diagnosis
-    diagnosis_div = Div(text="", styles={'padding': '10px'})
+
 
     counter = [0]
     view_div = Div(
@@ -289,38 +288,7 @@ def train_tab_layout(engine, trained_model_storage):
         p.title.text = f"Model Result — Run #{run_id}"
         view_div.text = f"<b style='color:#2c3e50;'>👁 Viewing Run #{run_id}</b>"
         
-    _DIAG_MESSAGES = {
-    "OK": ("✅", "#27ae60",
-        "No significant structure detected in residual. Model appears to fit well."),
-    "CHAOTIC_SYSTEM": ("🌀", "#2980b9",
-        "R² in derivative space is high ({r2_dx}) but the system appears chaotic "
-        "(λ ≈ {lyap}). Trajectory divergence is a mathematical property of this "
-        "system — not a model error. SINDy may still have found the correct equations."),
-    "DATA_QUALITY": ("📉", "#e74c3c",
-        "Low SNR detected ({snr_db} dB) — residual energy is close to signal energy. "
-        "Data may be too noisy. Try increasing Sparsity Threshold or smoothing your data."),
-    "LIBRARY_TOO_SIMPLE": ("⚠️", "#e67e22",
-        "Structured residual detected (autocorr={autocorr}) — the current library is "
-        "likely missing terms. Try increasing Degree or switching to Combined library."),
-    "UNDERFITTING": ("🔻", "#7f8c8d",
-        "R² is low ({r2_dx}) but residual shows no clear structure. "
-        "The sparsity threshold may be too aggressive, pruning valid terms. "
-        "Try lowering the Sparsity Threshold."),
-    }
 
-    def _render_diagnosis(diagnosis):
-        if not diagnosis:
-            return ""
-        html = "<b>🔬 Diagnosis Report:</b><br>"
-        for var, info in diagnosis.items():
-            icon, color, msg_tpl = _DIAG_MESSAGES[info['failure']]
-            msg = msg_tpl.format(**info)
-            html += (
-                f"<div style='margin:6px 0; padding:8px; "
-                f"border-left:4px solid {color}; background:#fafafa; border-radius:4px;'>"
-                f"<b>{icon} {var}:</b> {msg}</div>"
-            )
-        return html
 
     # -------------------------------------------------------------------------
     # 4. Callback
@@ -370,8 +338,6 @@ def train_tab_layout(engine, trained_model_storage):
                     train_frac   = train_frac,
                     random_seed  = counter[0] * 7,  # different seed each run
                 )
-            diagnosis     = engine.analyze_residual(X, t)
-            diagnosis_div.text = _render_diagnosis(diagnosis)
         except Exception as e:
             res_div.text = f"<span style='color:red;'>⚠ Fit error: {e}</span>"
             return
