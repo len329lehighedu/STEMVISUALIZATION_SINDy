@@ -65,7 +65,7 @@ class SINDyEngine:
         indices = rng.permutation(n)
 
         n_train    = int(n * train_frac)
-        train_idx  = np.sort(indices[:n_train])   # sort để giữ thứ tự time
+        train_idx  = np.sort(indices[:n_train])   # sort to keep order in time
         val_idx    = np.sort(indices[n_train:])
 
         X_train  = X[train_idx]
@@ -85,7 +85,7 @@ class SINDyEngine:
         # Fit directly with already calculated x_dot
         self.model.fit(X_train, t=t[train_idx], x_dot=dX_train, feature_names=names)
 
-        # Bước 4: calculate metrics on derivative space
+        # Step 4: calculate metrics on derivative space
         dX_train_pred = self.model.predict(X_train)
         dX_val_pred   = self.model.predict(X_val)
 
@@ -102,7 +102,9 @@ class SINDyEngine:
         rmse = float(np.sqrt(mse))
         mae  = float(mean_absolute_error(dX_true, dX_pred))
         r2   = float(r2_score(dX_true, dX_pred, multioutput='uniform_average'))
-        return {'mse': float(mse), 'rmse': rmse, 'mae': mae, 'r2': r2}
+        residual = dX_true - dX_pred
+        rss = np.sum(residual**2)
+        return {'mse': float(mse), 'rmse': rmse, 'mae': mae, 'r2': r2, 'rss':rss}
 
     # ------------------------------------------------------------------
     # Equations, simulate, metrics on x(t)
