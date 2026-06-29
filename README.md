@@ -38,7 +38,7 @@ Whether you are studying coupled oscillators, chaotic attractors, or your own cu
 - Click any past run to instantly restore its plot and diagnostics
 - Delete runs you no longer need
 
-### 🤖 AI Suggester
+### 🤖 Data Scouting Framework
 Before you train, the module analyzes your data and automatically recommends:
 - The right **library type** (via FFT-based periodicity detection)
 - The optimal **polynomial degree** (via R² comparison at degrees 1, 2, 3)
