@@ -97,8 +97,8 @@ SINDy/
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/len329lehighedu/STEM-VISUALIZATION---SINDy.git
-cd STEM-VISUALIZATION---SINDy
+git clone https://github.com/len329lehighedu/STEMVISUALIZATION_SINDy.git
+cd STEMVISUALIZATION_SINDy
 
 # 2. Create a virtual environment
 python -m venv venv
