@@ -66,8 +66,9 @@ def predict_tab_layout(engine, trained_model_storage):
     # 3. Plot
     # -------------------------------------------------------------------------
     p_pred = figure(title="Future Trajectory Prediction",
-                    width=900, height=500,
+                    sizing_mode="stretch_width", height=500,
                     x_axis_label="Time (s)", y_axis_label="State")
+    p_pred.scatter([], [], alpha=0)
     p_pred.legend.click_policy = "hide"
 
     source_pred = ColumnDataSource(data={})
@@ -184,6 +185,7 @@ def predict_tab_layout(engine, trained_model_storage):
             column(status_div)
         ),
         p_pred,
+        sizing_mode="stretch_width"
     )
 
     return layout, update_model_list

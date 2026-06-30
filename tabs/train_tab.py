@@ -413,7 +413,7 @@ def train_tab_layout(engine, trained_model_storage):
         p_scatter.line(
             [vmin, vmax], [vmin, vmax],
             color="#e74c3c", line_width=1.5, line_dash="dashed",
-            legend_label="ideal (y=x)",
+            legend_label="ideal",
         )
 
         for fig in [p_resid, p_fft, p_scatter]:

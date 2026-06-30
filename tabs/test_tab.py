@@ -102,10 +102,10 @@ def test_tab_layout(engine, trained_model_storage):
         TableColumn(field="variable",  title="Var",      width=100),
         TableColumn(field="rmse",      title="RMSE",     width=120),
         TableColumn(field="r2",        title="R²",       width=120),
-    ], width=730, height=150)
+    ], sizing_mode="stretch_width", height=300)
 
-    p1 = figure(title="Test Run 1", width=900, height=350, x_axis_label="Time (s)")
-    p2 = figure(title="Test Run 2", width=900, height=350, x_axis_label="Time (s)", visible=False)
+    p1 = figure(title="Test Run 1", width=900, height=350, x_axis_label="Time (s)", sizing_mode="stretch_width")
+    p2 = figure(title="Test Run 2", width=900, height=350, x_axis_label="Time (s)", visible=False, sizing_mode="stretch_width")
 
     # -------------------------------------------------------------------------
     # 4. Core test runner — use direct df instead of csv path
