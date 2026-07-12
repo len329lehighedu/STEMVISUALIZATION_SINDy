@@ -83,10 +83,10 @@ def train_tab_layout(engine, trained_model_storage):
             reason_text is a human-readable explanation shown in the UI.
         """
         try:
-            t      = df.iloc[:, 0].values
-            X      = df.iloc[:, 1:].values
+            t = df.iloc[:, 0].values
+            X = df.iloc[:, 1:].values
             n_vars = X.shape[1]
-            dt     = np.mean(np.diff(t)) if len(t) > 1 else 0.1
+            dt = np.mean(np.diff(t)) if len(t) > 1 else 0.1
 
             # ── 1. Calculate derivative ──────────────────────────────
             # Savitzky-Golay smoothing before differentiating: this is
@@ -97,7 +97,8 @@ def train_tab_layout(engine, trained_model_storage):
             window = min(11, len(t) // 10 * 2 + 1)
             window = max(window, 5)
             for i in range(n_vars):
-                smoothed = savgol_filter(X[:, i], window_length=window, polyorder=3)
+                smoothed = savgol_filter(
+                    X[:, i], window_length=window, polyorder=3)
                 dXdt[:, i] = np.gradient(smoothed, dt)
 
             # ── 2. Compare R² of degree 1, 2, 3 ────────────────────────
@@ -109,15 +110,15 @@ def train_tab_layout(engine, trained_model_storage):
 
             r2_scores = {}
             for deg in [1, 2, 3]:
-                poly   = PolynomialFeatures(degree=deg, include_bias=True)
+                poly = PolynomialFeatures(degree=deg, include_bias=True)
                 X_poly = poly.fit_transform(X)
-                lr     = LinearRegression(fit_intercept=False).fit(X_poly, dXdt)
+                lr = LinearRegression(fit_intercept=False).fit(X_poly, dXdt)
                 r2_scores[deg] = r2_score(dXdt, lr.predict(X_poly),
-                                        multioutput='uniform_average')
+                                          multioutput='uniform_average')
 
             r2_linear = r2_scores[1]
-            r2_deg2   = r2_scores[2]
-            r2_deg3   = r2_scores[3]
+            r2_deg2 = r2_scores[2]
+            r2_deg3 = r2_scores[3]
 
             # ── 3. Choose minimal degree that satisfies R² ──────────────────
             # If degree=1 is already sufficient → treat as a linear system.
@@ -140,9 +141,10 @@ def train_tab_layout(engine, trained_model_storage):
             # indicates a strongly oscillatory/periodic signal.
             is_periodic = False
             for i in range(n_vars):
-                signal   = X[:, i] - np.mean(X[:, i])  # remove DC offset before FFT
+                # remove DC offset before FFT
+                signal = X[:, i] - np.mean(X[:, i])
                 fft_vals = np.abs(np.fft.rfft(signal))
-                peaks    = fft_vals[1:]  # skip the DC bin
+                peaks = fft_vals[1:]  # skip the DC bin
                 if len(peaks) > 0:
                     if np.max(peaks) > 5 * np.mean(peaks):
                         is_periodic = True
@@ -154,7 +156,7 @@ def train_tab_layout(engine, trained_model_storage):
             # content is usually negligible for smooth trajectories).
             noise_estimates = []
             for i in range(n_vars):
-                amp  = np.abs(np.fft.rfft(X[:, i])) / len(t)
+                amp = np.abs(np.fft.rfft(X[:, i])) / len(t)
                 high = np.sort(amp)[-max(1, int(len(amp) * 0.2)):]
                 noise_estimates.append(float(np.median(high)))
             noise_level = float(np.mean(noise_estimates))
@@ -200,9 +202,8 @@ def train_tab_layout(engine, trained_model_storage):
         """
         lib, deg, thr, reason = analyze_data_linearity(df)
         poly_s.value = deg
-        thr_s.value  = thr
+        thr_s.value = thr
         upload_status.text = f"{prefix_msg}<br><b style='color:#247008;'>Suggestion:</b> {reason}"
-
 
     # =========================================================================
     # SECTION 2 — DATA SOURCE SELECTION
@@ -219,9 +220,11 @@ def train_tab_layout(engine, trained_model_storage):
                          value="cs_train_data.csv")
 
     # File upload widget — hidden until the user picks "Upload your own data".
-    file_input     = FileInput(accept=".csv", visible=False)
-    upload_status  = Div(text="", styles={'color': "#247008", 'font-size': '13px'})
-    _upload_buffer = {'data': None}  # caches the last base64 payload (currently informational)
+    file_input = FileInput(accept=".csv", visible=False)
+    upload_status = Div(
+        text="", styles={'color': "#247008", 'font-size': '13px'})
+    # caches the last base64 payload (currently informational)
+    _upload_buffer = {'data': None}
 
     def on_file_select_change(attr, old, new):
         """
@@ -264,7 +267,6 @@ def train_tab_layout(engine, trained_model_storage):
 
     file_input.on_change('value', upload_to_local_drive)
 
-
     # =========================================================================
     # SECTION 3 — MODEL CONFIGURATION CONTROLS
     # Library type, train/validation split, polynomial degree, sparsity
@@ -283,7 +285,7 @@ def train_tab_layout(engine, trained_model_storage):
 
     split_div = Div(
         text="<b style='color:#247008;'>Split: Train 60% | Validation 40%</b>",
-        styles={'padding': '4px 0','font-size':'13px'}
+        styles={'padding': '4px 0', 'font-size': '13px'}
     )
 
     def on_train_s_change(attr, old, new):
@@ -295,10 +297,12 @@ def train_tab_layout(engine, trained_model_storage):
 
     train_s.on_change('value', on_train_s_change)
 
-    poly_s    = Slider(start=1, end=5,     value=1,   step=1,     title="Degree / Harmonics")
-    thr_s     = Slider(start=0.001, end=0.5, value=0.1, step=0.005, title="Sparsity Threshold")
-    btn_train = Button(label="TRAIN", button_type="primary", height=50, width=100)
-
+    poly_s = Slider(start=1, end=5,     value=1,
+                    step=1,     title="Degree / Harmonics")
+    thr_s = Slider(start=0.001, end=0.5, value=0.1,
+                   step=0.005, title="Sparsity Threshold")
+    btn_train = Button(label="TRAIN", button_type="primary",
+                       height=50, width=100)
 
     # =========================================================================
     # SECTION 4 — HISTORY TABLE (LEADERBOARD)
@@ -349,7 +353,7 @@ def train_tab_layout(engine, trained_model_storage):
 
     btn_delete = Button(label="DELETE",
                         button_type="danger", width=100, height=50)
-    btn_delete.disabled = True # default disable when there is no run
+    btn_delete.disabled = True  # default disable when there is no run
 
     def on_row_select(attr, old, new):
         """
@@ -371,7 +375,6 @@ def train_tab_layout(engine, trained_model_storage):
 
     source_history.selected.on_change('indices', on_row_select)
 
-
     # =========================================================================
     # SECTION 5 — MAIN RESULT PLOT
     # Shows train/validation points scattered against the SINDy-simulated
@@ -386,9 +389,9 @@ def train_tab_layout(engine, trained_model_storage):
 
     res_div = Div(
         text="<h3>Run Equations:</h3>",
-        styles={'background': '#f8f9fa', 'padding': '10px', 'border-radius': '5px'}
+        styles={'background': '#f8f9fa',
+                'padding': '10px', 'border-radius': '5px'}
     )
-
 
     # =========================================================================
     # SECTION 6 — RESIDUAL DIAGNOSTIC PLOTS
@@ -444,9 +447,9 @@ def train_tab_layout(engine, trained_model_storage):
         styles={'padding': '6px', 'font-family': 'monospace', 'font-size': '12px'}
     )
 
-    counter  = [0]   # run counter — monotonically increasing, never reset
-                     # even after deletions (see project history: run IDs
-                     # are intentionally permanent to avoid ambiguity).
+    counter = [0]   # run counter — monotonically increasing, never reset
+    # even after deletions (see project history: run IDs
+    # are intentionally permanent to avoid ambiguity).
     view_div = Div(
         text="",
         styles={'color': '#7f8c8d', 'font-size': '13px', 'padding': '4px 0'}
@@ -458,10 +461,10 @@ def train_tab_layout(engine, trained_model_storage):
         of a given run. This is what allows switching between runs in the
         leaderboard without re-running the (potentially expensive) SINDy fit.
         """
-        data       = trained_model_storage[run_id]['plot_data']
-        t, X       = data['t'], data['X']
-        train_idx  = data['train_idx']
-        val_idx    = data['val_idx']
+        data = trained_model_storage[run_id]['plot_data']
+        t, X = data['t'], data['X']
+        train_idx = data['train_idx']
+        val_idx = data['val_idx']
         x_sim_full = data['x_sim']
 
         p.renderers = []
@@ -477,10 +480,10 @@ def train_tab_layout(engine, trained_model_storage):
         # SINDy-simulated trajectory in GREEN
         if x_sim_full is not None:
             p.line(t, x_sim_full[:, 0],
-                  color="#2ecc71", line_width=2.5, legend_label="SINDy found")
+                   color="#2ecc71", line_width=2.5, legend_label="SINDy found")
 
         p.legend.click_policy = "hide"
-        p.legend.location     = "top_right"
+        p.legend.location = "top_right"
         p.title.text = f"Model Result — Run #{run_id}"
         view_div.text = f"<b style='color:#2c3e50;'>👁 Viewing Run #{run_id}</b>"
 
@@ -514,15 +517,18 @@ def train_tab_layout(engine, trained_model_storage):
             return
 
         # Clear all 3 plots before redrawing.
-        p_resid.renderers   = []
-        p_fft.renderers     = []
+        p_resid.renderers = []
+        p_fft.renderers = []
         p_scatter.renderers = []
-        if p_resid.legend:   p_resid.legend.items   = []
-        if p_fft.legend:     p_fft.legend.items     = []
-        if p_scatter.legend: p_scatter.legend.items = []
+        if p_resid.legend:
+            p_resid.legend.items = []
+        if p_fft.legend:
+            p_fft.legend.items = []
+        if p_scatter.legend:
+            p_scatter.legend.items = []
 
         var_names = list(diag['residuals'].keys())
-        freqs     = diag['fft_freqs']
+        freqs = diag['fft_freqs']
 
         for idx, name in enumerate(var_names):
             color = _DIAG_COLORS[idx % len(_DIAG_COLORS)]
@@ -556,7 +562,7 @@ def train_tab_layout(engine, trained_model_storage):
         # mechanical systems, chaotic attractors — without any hardcoded
         # frequency limit.
         all_amps = np.concatenate([diag['fft_amps'][n] for n in var_names])
-        max_amp  = float(all_amps.max())
+        max_amp = float(all_amps.max())
 
         if max_amp > 0:
             significant_indices = np.where(all_amps > 0.01 * max_amp)[0]
@@ -565,16 +571,16 @@ def train_tab_layout(engine, trained_model_storage):
                 # all_amps is a concatenation of n_vars arrays each of
                 # length n_freqs — map the flat index back onto the shared
                 # frequency axis with a modulo.
-                n_freqs  = len(freqs)
+                n_freqs = len(freqs)
                 last_idx = int(significant_indices[-1]) % n_freqs
-                f_max    = float(freqs[last_idx])
+                f_max = float(freqs[last_idx])
 
                 # 20% margin so the last visible peak isn't clipped at the edge.
-                p_fft.x_range.end   = f_max * 1.2
+                p_fft.x_range.end = f_max * 1.2
                 p_fft.x_range.start = 0.0
 
         # Add a y=x reference line to Plot 3 (the "ideal fit" diagonal).
-        all_vals   = np.concatenate([diag['dX_true'][n] for n in var_names])
+        all_vals = np.concatenate([diag['dX_true'][n] for n in var_names])
         vmin, vmax = float(all_vals.min()), float(all_vals.max())
         p_scatter.line(
             [vmin, vmax], [vmin, vmax],
@@ -584,7 +590,7 @@ def train_tab_layout(engine, trained_model_storage):
 
         for fig in [p_resid, p_fft, p_scatter]:
             fig.legend.click_policy = "hide"
-            fig.legend.location     = "top_right"
+            fig.legend.location = "top_right"
 
         # Build the stats summary — one line per state variable.
         stats_html = "<b>Residual Stats:</b><br>"
@@ -596,7 +602,6 @@ def train_tab_layout(engine, trained_model_storage):
                 f"autocorr={s['autocorr']}<br>"
             )
         diag_stats_div.text = stats_html
-
 
     # =========================================================================
     # SECTION 7 — TRAIN CALLBACK
@@ -622,19 +627,19 @@ def train_tab_layout(engine, trained_model_storage):
                 return
             # Decode the uploaded CSV (base64 -> bytes -> DataFrame).
             decoded = base64.b64decode(file_input.value)
-            f  = io.BytesIO(decoded)
+            f = io.BytesIO(decoded)
             df = pd.read_csv(f).astype(np.float64)
         else:
             # Load one of the bundled pre-set system files.
             path = os.path.join('data', file_select.value)
-            df   = pd.read_csv(path).astype(np.float64)
+            df = pd.read_csv(path).astype(np.float64)
 
         counter[0] += 1  # unique, ever-increasing run ID
 
         # ── 2. Parse data into time / state matrices ────────────────────────
-        t          = df.iloc[:, 0].values
-        X          = df.iloc[:, 1:].values
-        names      = list(df.columns[1:])
+        t = df.iloc[:, 0].values
+        X = df.iloc[:, 1:].values
+        names = list(df.columns[1:])
         train_frac = train_s.value / 100.0
 
         # ── 3. Fit SINDy on a random train/validation split ─────────────────
@@ -646,12 +651,12 @@ def train_tab_layout(engine, trained_model_storage):
             model, train_idx, val_idx, m_train, m_val = \
                 engine.fit_model_random_split(
                     X, t,
-                    poly_degree  = poly_s.value,
-                    threshold    = thr_s.value,
-                    names        = names,
-                    lib_type     = library_select.value,
-                    train_frac   = train_frac,
-                    random_seed  = counter[0] * 7,  # unique seed per run
+                    poly_degree=poly_s.value,
+                    threshold=thr_s.value,
+                    names=names,
+                    lib_type=library_select.value,
+                    train_frac=train_frac,
+                    random_seed=counter[0] * 7,  # unique seed per run
                 )
         except Exception as e:
             res_div.text = f"<span style='color:red;'>⚠ Fit error: {e}</span>"
@@ -676,7 +681,8 @@ def train_tab_layout(engine, trained_model_storage):
         # ── 6. Format the discovered equations for display ─────────────────
         raw_eqs = engine.get_equations()
         formatted_eqs_html = "".join(
-            [f"<b style='color:#e74c3c;'>({i+1})</b> {eq}<br>" for i, eq in enumerate(raw_eqs)]
+            [f"<b style='color:#e74c3c;'>({i+1})</b> {eq}<br>" for i,
+             eq in enumerate(raw_eqs)]
         )
 
         # ── 7. Append a new row to the leaderboard ──────────────────────────
@@ -702,7 +708,8 @@ def train_tab_layout(engine, trained_model_storage):
         trained_model_storage[counter[0]] = {
             'run_id':             counter[0],
             'system_name':        file_select.value,
-            'model_instance':     copy.deepcopy(engine.model),  # snapshot — engine.model gets overwritten on next Train
+            # snapshot — engine.model gets overwritten on next Train
+            'model_instance':     copy.deepcopy(engine.model),
             'lib_type':           library_select.value,
             'poly_degree':        poly_s.value,
             'threshold':          thr_s.value,
@@ -744,7 +751,7 @@ def train_tab_layout(engine, trained_model_storage):
         if not selected:
             return
 
-        idx    = selected[0]
+        idx = selected[0]
         run_id = source_history.data['run'][idx]
 
         # Remove from the model storage dict.
@@ -778,7 +785,7 @@ def train_tab_layout(engine, trained_model_storage):
         # the range will be auto-scaled again on the next training run.
         diag_stats_div.text = "<i>Run a training session to see diagnostics.</i>"
         p_fft.x_range.start = 0.0
-        p_fft.x_range.end   = 1.0
+        p_fft.x_range.end = 1.0
 
     btn_delete.on_click(on_delete_click)
 
@@ -789,12 +796,12 @@ def train_tab_layout(engine, trained_model_storage):
     if os.path.exists(initial_path):
         try:
             df_init = pd.read_csv(initial_path).astype(np.float64)
-            apply_suggestion(df_init, f"Loaded default pre-set system: <b>{file_select.value}</b>")
+            apply_suggestion(
+                df_init, f"Loaded default pre-set system: <b>{file_select.value}</b>")
         except Exception:
             pass  # non-fatal — user can still configure manually
 
     btn_train.on_click(on_train_click)
-
 
     # =========================================================================
     # SECTION 8 — LAYOUT ASSEMBLY
@@ -802,7 +809,7 @@ def train_tab_layout(engine, trained_model_storage):
 
     top_row = row(
         column(file_select, file_input, upload_status, train_s, split_div, library_select,
-               poly_s, thr_s, row(btn_train,btn_delete), width=320),
+               poly_s, thr_s, row(btn_train, btn_delete), width=320),
         column(p, view_div, sizing_mode="stretch_width"),
         sizing_mode="stretch_width"
     )
