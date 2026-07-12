@@ -52,11 +52,12 @@ def test_tab_layout(engine, trained_model_storage):
             file_select_2.visible = not is_custom
             file_input_test1.visible = is_custom
             file_input_test2.visible = is_custom
-
+            
             # Reset buffer when change model
             _upload_buffer['test1'] = None
             _upload_buffer['test2'] = None
-            status_div.text = "<i>Select a model to start.</i>"
+            status_div1.text = "<i>Select a model to start.</i>"
+            status_div2.text = "<i>Select a model to start.</i>"
             
             if not is_custom:
                 targets = get_test_filenames_list(run_id)
@@ -65,7 +66,7 @@ def test_tab_layout(engine, trained_model_storage):
             print(f"UI Update Error: {e}")
 
     model_select.on_change('value', update_ui_on_model_select)
-    btn_test = Button(label="▶ RUN TEST", button_type="danger", height=50)
+    btn_test = Button(label="TEST", button_type="primary", height=50,width=100)
     
     # -------------------------------------------------------------------------
     # 2. Upload Logic — only cache base64, not reading filename
@@ -74,20 +75,24 @@ def test_tab_layout(engine, trained_model_storage):
         if not new:
             return
         _upload_buffer['test1'] = new          # cache raw base64
-        status_div.text = "<b style='color:green;'>✅ Test file 1 ready. Click RUN TEST.</b>"
+        status_div1.text = "<b style='color:green;'>✅ Test file 1 ready. Click RUN TEST.</b>"
 
     def on_upload_test2(attr, old, new):
         if not new:
             return
         _upload_buffer['test2'] = new          # cache raw base64
-        status_div.text = "<b style='color:green;'>✅ Test file 2 ready. Click RUN TEST.</b>"
+        status_div2.text = "<b style='color:green;'>✅ Test file 2 ready. Click RUN TEST.</b>"
 
     file_input_test1.on_change('value', on_upload_test1)
     file_input_test2.on_change('value', on_upload_test2)
 
-    status_div = Div(
+    status_div1 = Div(
         text="<i>Select a model to start.</i>",
-        styles={'padding': '8px', 'background': '#f8f9fa'}
+        styles={'padding': '8px'}
+    )
+    status_div2 = Div(
+        text="<i>Select a model to start.</i>",
+        styles={'padding': '8px'}
     )
 
     # -------------------------------------------------------------------------
@@ -182,14 +187,14 @@ def test_tab_layout(engine, trained_model_storage):
         is_custom = file_input_test1.visible
         if is_custom:
             if not _upload_buffer['test1']:
-                status_div.text = "<b style='color:red;'>⚠️ Please upload Test file 1 first.</b>"
+                status_div1.text = "<b style='color:red;'>⚠️ Please upload Test file 1 first.</b>"
                 return
             df, err = _load_df_from_buffer(_upload_buffer['test1'])
         else:
             df, err = _load_df_from_select(file_select_1.value)
 
         if err:
-            status_div.text = f"<b style='color:red;'>⚠️ Run 1 error: {err}</b>"
+            status_div1.text = f"<b style='color:red;'>⚠️ Run 1 error: {err}</b>"
         elif df is not None:
             rows, err = _run_single_test(p1, df, "Run 1")
             if rows:
@@ -212,7 +217,7 @@ def test_tab_layout(engine, trained_model_storage):
                 if file_select_2.value != "(none)" else (None, None)
 
         if err2:
-            status_div.text = f"<b style='color:red;'>⚠️ Run 2 error: {err2}</b>"
+            status_div2.text = f"<b style='color:red;'>⚠️ Run 2 error: {err2}</b>"
         elif df2 is not None:
             rows2, err2 = _run_single_test(p2, df2, "Run 2")
             if rows2:
@@ -226,7 +231,8 @@ def test_tab_layout(engine, trained_model_storage):
 
         source_metrics.data = res_data
         if not err and not err2:
-            status_div.text = "<b style='color:green;'>✅ Test complete!</b>"
+            status_div1.text = "<b style='color:247008;'>✅ Test complete!</b>"
+            status_div2.text = "<b style='color:247008;'>✅ Test complete!</b>"
 
     # Placeholder for _run_single_test
     model_instance = None
@@ -250,12 +256,11 @@ def test_tab_layout(engine, trained_model_storage):
     layout = column(
         Div(text="<h3>🧪 Test Evaluation</h3>"),
         row(
-            model_select,
-            column(file_select_1, file_input_test1),
-            column(file_select_2, file_input_test2),
-            btn_test
+            column(model_select,btn_test),
+            column(file_select_1, file_input_test1,status_div1),
+            column(file_select_2, file_input_test2,status_div2),
         ),
-        status_div, metrics_table, p1, p2,
+        metrics_table, p1, p2,
         sizing_mode="stretch_width"
     )
     return layout, update_model_list
