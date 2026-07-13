@@ -299,8 +299,8 @@ def train_tab_layout(engine, trained_model_storage):
 
     poly_s = Slider(start=1, end=5,     value=1,
                     step=1,     title="Degree / Harmonics")
-    thr_s = Slider(start=0.001, end=0.5, value=0.1,
-                   step=0.005, title="Sparsity Threshold")
+    thr_s = Slider(start=0.0, end=0.5, value=0.1,
+                   step=0.01, title="Sparsity Threshold")
     btn_train = Button(label="TRAIN", button_type="primary",
                        height=50, width=100)
 
