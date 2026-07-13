@@ -185,7 +185,7 @@ def train_tab_layout(engine, trained_model_storage):
             else:
                 sug_library = "Polynomial"
 
-            reason = f"Degree:{sug_degree}; Threshold:{sug_threshold}; Noise≈{noise_level:.4f}."
+            reason = f"Degree: {sug_degree}; Threshold: {sug_threshold}; Noise ≈ {noise_level:.4f}."
             return sug_library, sug_degree, sug_threshold, reason
 
         except Exception as e:
@@ -203,7 +203,7 @@ def train_tab_layout(engine, trained_model_storage):
         lib, deg, thr, reason = analyze_data_linearity(df)
         poly_s.value = deg
         thr_s.value = thr
-        upload_status.text = f"{prefix_msg}<br><b style='color:#247008;'>Suggestion:</b> {reason}"
+        upload_status.text = f"{prefix_msg}<br><b>Suggestion:</b> {reason}"
 
     # =========================================================================
     # SECTION 2 — DATA SOURCE SELECTION
@@ -837,7 +837,7 @@ def train_tab_layout(engine, trained_model_storage):
         try:
             df_init = pd.read_csv(initial_path).astype(np.float64)
             apply_suggestion(
-                df_init, f"Loaded default pre-set system: <b>{file_select.value}</b>")
+                df_init, f"<b>Loaded default pre-set system: {file_select.value}</b>")
         except Exception:
             pass  # non-fatal — user can still configure manually
 
