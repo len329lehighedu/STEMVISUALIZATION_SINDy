@@ -1,2 +1,0 @@
-Left: bokeh serve --allow-websocket-origin=127.0.0.1:8080 main.py
-Right: python3 flask_app.py
