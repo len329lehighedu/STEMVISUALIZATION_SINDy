@@ -1,26 +1,30 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>SINDy System</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/polyfill/3.25.1/polyfill.min.js"></script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-    
+
     {{ bokeh_js | safe }}
 </head>
+
 <body>
-    <header><h1>SINDy module</h1></header>
-    
+    <header>
+        <h1>SINDy module</h1>
+    </header>
+
     <div class="navbar">
-        <a href="{{ url_for('storyline') }}" class="{{ 'active' if request.endpoint == 'storyline' }}">PROBLEM STATEMENT</a>
-        <a href="{{ url_for('about') }}" class="{{ 'active' if request.endpoint == 'about' }}">ABOUT SINDy</a>
-        <a href="{{ url_for('instructions') }}" class="{{ 'active' if request.endpoint == 'instructions' }}">INSTRUCTIONS</a>
-        <a href="{{ url_for('questions') }}" class="{{ 'active' if request.endpoint == 'questions' }}">GENERAL QUESTIONS</a>
+        <a href="#" onclick="loadPage('storyline')">PROBLEM STATEMENT</a>
+        <a href="#" onclick="loadPage('about')">ABOUT SINDy</a>
+        <a href="#" onclick="loadPage('instructions')">INSTRUCTIONS</a>
+        <a href="#" onclick="loadPage('questions')">GENERAL QUESTIONS</a>
     </div>
 
     <div class="container main-content-area">
-        {% block content %}{% endblock %}
+        <div id="page-content"></div>
     </div>
 
     <div class="container module-section">
@@ -28,28 +32,28 @@
             <h2> SINDy Module</h2>
             <p>Configure and run in real-time.</p>
         </div>
-        
+
         <div class="bokeh-app-wrapper">
             {% if script %}
-                {{ script | safe }}
+            {{ script | safe }}
             {% else %}
-                <div class="loading-status">
-                    <p>Dashboard is initializing... Please wait.</p>
-                </div>
+            <div class="loading-status">
+                <p>Dashboard is initializing... Please wait.</p>
+            </div>
             {% endif %}
         </div>
     </div>
 
     <style>
-        body { 
-            background-color: #ffffff !important; 
-            margin: 0; 
+        body {
+            background-color: #ffffff !important;
+            margin: 0;
             font-family: 'Inter', sans-serif;
             scroll-behavior: smooth;
         }
 
         .main-content-area {
-            min-height: 1vh; 
+            min-height: 1vh;
             padding: 10px 5px;
         }
 
@@ -60,6 +64,7 @@
             background-color: #ffffff;
             /* border-bottom: 2px dashed #dcdde1; */
         }
+
         .divider-text {
             position: absolute;
             top: -12px;
@@ -76,18 +81,21 @@
         /* Module section below */
         .module-section {
             padding: 50px 20px;
-            background: #ffffff; 
+            background: #ffffff;
             border-top: 1px solid #ffffff;
         }
+
         .workstation-header {
             text-align: center;
             margin-bottom: 40px;
         }
+
         .workstation-header h2 {
             color: #2c3e50;
             font-size: 28px;
             margin-bottom: 10px;
         }
+
         .bokeh-app-wrapper {
             width: 100%;
             overflow-x: auto;
@@ -100,5 +108,33 @@
             color: #bdc3c7;
         }
     </style>
+
+    <script>
+
+        async function loadPage(page) {
+
+            const response = await fetch("/fragment/" + page);
+
+            const html = await response.text();
+
+            document.getElementById("page-content").innerHTML = html;
+
+            window.scrollTo({
+                top: 0,
+                behavior: "smooth"
+            });
+
+            if (window.MathJax) {
+                MathJax.typesetPromise();
+            }
+
+        }
+
+        window.onload = function () {
+            loadPage("storyline");
+        }
+
+    </script>
 </body>
+
 </html>

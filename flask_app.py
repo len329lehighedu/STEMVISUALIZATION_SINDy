@@ -3,28 +3,36 @@ from bokeh.embed import server_document
 
 app = Flask(__name__)
 
-# Link to Bokeh Server 
-BOKEH_URL = "http://localhost:5006/main" 
+BOKEH_URL = "http://localhost:5006/main"
+
 
 @app.route("/")
+def index():
+    script = server_document(BOKEH_URL)
+    return render_template(
+        "base.html",
+        script=script
+    )
+
+
+@app.route("/fragment/storyline")
 def storyline():
-    script = server_document(BOKEH_URL)
-    return render_template("storyline.html", script=script) 
+    return render_template("fragment/storyline.html")
 
-@app.route("/about")
+
+@app.route("/fragment/about")
 def about():
-    script = server_document(BOKEH_URL)
-    return render_template("about.html", script=script) 
+    return render_template("fragment/about.html")
 
-@app.route("/instructions")
+
+@app.route("/fragment/instructions")
 def instructions():
-    script = server_document(BOKEH_URL)
-    return render_template("instructions.html", script=script) 
+    return render_template("fragment/instructions.html")
 
-@app.route("/questions")
+
+@app.route("/fragment/questions")
 def questions():
-    script = server_document(BOKEH_URL)
-    return render_template("questions.html", script=script) #
+    return render_template("fragment/questions.html")
 
 
 if __name__ == "__main__":
