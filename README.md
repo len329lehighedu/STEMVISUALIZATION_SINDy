@@ -216,6 +216,11 @@ Three principles guided every design decision:
 
 ---
 
+## Read more about this module at: [SINDy_manual](https://docs.google.com/document/d/18w_dNzLmZ-sViatktrZAYshPUXA2W_vM/edit?usp=sharing&ouid=102347802978261295549&rtpof=true&sd=true)
+
+
+---
+
 ## 🤝 Contributing
 
 Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
