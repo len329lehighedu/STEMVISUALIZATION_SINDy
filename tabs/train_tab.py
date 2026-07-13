@@ -369,17 +369,17 @@ def train_tab_layout(engine, trained_model_storage):
     ))
 
     columns = [
-        TableColumn(field="run",        title="Run #",           width=50),
+        TableColumn(field="run",        title="Run #",           width=100),
         TableColumn(field="lib",        title="Library",         width=200),
         TableColumn(field="poly",        title="Degree",          width=100),
         TableColumn(field="thr",        title="Noise",          width=100),
-        TableColumn(field="train_r2",   title="Train R² (dX)",   width=200),
-        TableColumn(field="train_rmse", title="Train RMSE (dX)", width=200),
-        TableColumn(field="train_mae",  title="Train MAE (dX)",  width=200),
-        TableColumn(field="val_r2",     title="Val R² (dX)",     width=200),
-        TableColumn(field="val_rmse",   title="Val RMSE (dX)",   width=200),
-        TableColumn(field="val_mae",    title="Val MAE (dX)",    width=200),
-        TableColumn(field="rmse_diff",  title="RMSE Diff",       width=200),
+        TableColumn(field="train_r2",   title="Train R² (dX)",   width=250),
+        TableColumn(field="train_rmse", title="Train RMSE (dX)", width=250),
+        TableColumn(field="train_mae",  title="Train MAE (dX)",  width=250),
+        TableColumn(field="val_r2",     title="Val R² (dX)",     width=250),
+        TableColumn(field="val_rmse",   title="Val RMSE (dX)",   width=250),
+        TableColumn(field="val_mae",    title="Val MAE (dX)",    width=250),
+        TableColumn(field="rmse_diff",  title="RMSE Diff",       width=250),
         TableColumn(field="equations",  title="Identified Equations",
                     width=1000, formatter=eqn_formatter),
     ]
