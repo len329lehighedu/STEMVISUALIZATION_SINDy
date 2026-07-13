@@ -234,13 +234,13 @@ def train_tab_layout(engine, trained_model_storage):
         """
         if new == "custom_upload":
             file_input.visible = True
-            upload_status.text = "ℹ️ Please upload a CSV with columns: t, x1, x2..."
+            upload_status.text = "Please upload a CSV with columns: t, x1, x2..."
         else:
             file_input.visible = False
             path = os.path.join('data', new)
             if os.path.exists(path):
                 df = pd.read_csv(path).astype(np.float64)
-                apply_suggestion(df, f"Selected system file: <b>{new}</b>")
+                apply_suggestion(df, f"<b>Selected system file: {new}</b>")
             else:
                 upload_status.text = f"⚠ Pre-set file not found at {path}"
 
@@ -355,7 +355,7 @@ def train_tab_layout(engine, trained_model_storage):
     eqn_template = """
     <div style="white-space: normal; word-wrap: break-word; line-height: 1.5;
                 padding: 8px 0; font-family: 'Courier New', monospace;
-                font-size: 12px; color: #2c3e50;">
+                font-size: 12px; color: #00000;">
         <%= value %>
     </div>
     """
@@ -483,8 +483,8 @@ def train_tab_layout(engine, trained_model_storage):
     # Text summary shown above the 3 diagnostic plots (R², SNR, autocorrelation
     # per state variable).
     diag_stats_div = Div(
-        text="<i>Run a training session to see diagnostics.</i>",
-        styles={'padding': '6px', 'font-family': 'monospace', 'font-size': '12px'}
+        text="<a>Run a training session to see diagnostics.</a>",
+        styles={'font-size': '13px', 'color' : '#00000'}
     )
 
     counter = [0]   # run counter — monotonically increasing, never reset
