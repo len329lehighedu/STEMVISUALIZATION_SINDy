@@ -281,7 +281,7 @@ def train_tab_layout(engine, trained_model_storage):
     # (This UX choice avoids the earlier bug where two independent sliders
     # could be set to sum to less/more than 100%.)
     train_s = Slider(start=10, end=90, value=60, step=5,
-                     title="")
+                     title="Train/Validation Split")
     train_s.show_value = False
     split_select = Select(
         title="SPLIT TYPE",
@@ -293,17 +293,11 @@ def train_tab_layout(engine, trained_model_storage):
         width=150,
     )
 
-    split_div = Div(
-        text="<b style='color:#247008;'>SPLIT: TRAIN 60% | VALIDATION 40%</b>",
-        styles={'padding': '4px 0', 'font-size': '13px'}
-    )
 
     def on_train_s_change(attr, old, new):
         """Keep the human-readable split label in sync with the slider."""
-        split_div.text = (
-            f"<b style='color:#247008;'>"
-            f"SPLIT: TRAIN {new}% | VALIDATION {100 - new}%</b>"
-        )
+        train_s.title = f"SPLIT: TRAIN {new}% | VALIDATION {100 - new}%"
+        
 
     train_s.on_change('value', on_train_s_change)
 
@@ -861,7 +855,7 @@ def train_tab_layout(engine, trained_model_storage):
     # =========================================================================
 
     top_row = row(
-        column(file_select, file_input, upload_status, split_div,train_s, split_select, library_select,
+        column(file_select, train_s, split_select, library_select,
                poly_s, thr_s, thr_input, row(btn_train, btn_delete), width=320),
         column(p, view_div, sizing_mode="stretch_width"),
         sizing_mode="stretch_width"
