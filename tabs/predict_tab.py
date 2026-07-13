@@ -175,11 +175,12 @@ def predict_tab_layout(engine, trained_model_storage):
     # 6. Layout
     # -------------------------------------------------------------------------
     layout = column(
-        row(model_select, horizon_s, btn_predict),
+        row(model_select, horizon_s),
         row(
             column(
                 ic_hint_div,
                 ic_input,
+                btn_predict,
                 width=350
             ),
             column(status_div)
