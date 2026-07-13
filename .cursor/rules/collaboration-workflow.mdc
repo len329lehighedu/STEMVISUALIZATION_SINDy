@@ -1,0 +1,42 @@
+---
+description: Plan-before-code workflow and English commenting standards for this project
+alwaysApply: true
+---
+
+# Collaboration Workflow
+
+## Plan First — Get Approval Before Coding or Committing
+
+Before editing files, creating commits, or opening PRs, present a plan and wait for explicit user approval.
+
+The plan must cover:
+
+| Section | What to include |
+|---------|-----------------|
+| **Problem** | What is broken or missing, and why it matters |
+| **Files** | Which files will change and what will change in each |
+| **Add / remove** | What is added, removed, or left unchanged |
+| **Benefit** | What the change fixes or improves |
+| **Trade-offs** | Limitations, risks, or follow-up work (if any) |
+
+Do **not** implement or commit until the user agrees. If the user only asked a question or wants a review, do not change code.
+
+When the user asks for a commit, still confirm the scope if anything is ambiguous.
+
+## Code Comments — English, Context-Rich
+
+All new or modified code comments and docstrings must be in **English**.
+
+- Explain **why**, not just **what** — especially for non-obvious logic (navigation, session/state, signal processing, math, UI callbacks).
+- Comment at function, block, and decision-point level where a future reader needs context.
+- Do not add noise on self-explanatory lines.
+
+Example:
+
+```python
+# BAD: increments counter
+count += 1
+
+# GOOD: Skip the first sample — pySINDy finite-difference stencil needs a boundary point
+count += 1
+```

@@ -27,10 +27,5 @@ def questions():
     return render_template("questions.html", script=script) #
 
 
-@app.route("/dashboard")
-def dashboard():
-    script = server_document(BOKEH_URL)
-    return render_template("dashboard.html", script=script)
-
 if __name__ == "__main__":
     app.run(port=8080, debug=True)
