@@ -216,7 +216,7 @@ def train_tab_layout(engine, trained_model_storage):
         ("custom_upload",       "Upload your own data")
     ]
 
-    file_select = Select(title="1) SELECT SYSTEM", options=system_options,
+    file_select = Select(title="SELECT SYSTEM", options=system_options,
                          value="cs_train_data.csv")
 
     # File upload widget — hidden until the user picks "Upload your own data".
@@ -273,7 +273,7 @@ def train_tab_layout(engine, trained_model_storage):
     # threshold, and the Train button.
     # =========================================================================
 
-    library_select = Select(title="2) LIBRARY",
+    library_select = Select(title="LIBRARY",
                             options=["Polynomial", "Fourier", "Combined"],
                             value="Polynomial")
 
@@ -290,11 +290,11 @@ def train_tab_layout(engine, trained_model_storage):
             "Random Sampling",
             "Time-based",
         ],
-        width=100,
+        width=150,
     )
 
     split_div = Div(
-        text="<b style='color:#247008;'>Split: Train 60% | Validation 40%</b>",
+        text="<b style='color:#247008;'>SPLIT: TRAIN 60% | VALIDATION 40%</b>",
         styles={'padding': '4px 0', 'font-size': '13px'}
     )
 
@@ -302,15 +302,15 @@ def train_tab_layout(engine, trained_model_storage):
         """Keep the human-readable split label in sync with the slider."""
         split_div.text = (
             f"<b style='color:#247008;'>"
-            f"Split: Train {new}% | Validation {100 - new}%</b>"
+            f"SPLIT: TRAIN {new}% | VALIDATION {100 - new}%</b>"
         )
 
     train_s.on_change('value', on_train_s_change)
 
     poly_s = Slider(start=1, end=5,     value=1,
-                    step=1,     title="Degree / Harmonics")
+                    step=1,     title="DEGREE / HARMONICS")
     thr_s = Slider(start=0.0, end=0.5, value=0.1,
-                   step=0.005, title="Sparsity Threshold")
+                   step=0.005, title="SPARSITY THRESHOLD")
     # ── Manual threshold input ──────────────────────────────────────────
     # Some systems turned out to be very sensitive to the exact threshold
     # value — the 0.005 slider step is too coarse for fine-tuning (e.g.
