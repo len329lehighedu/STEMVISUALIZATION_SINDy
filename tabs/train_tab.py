@@ -17,7 +17,7 @@
 # =============================================================================
 
 from bokeh.models import (ColumnDataSource, Slider, Div, Button,
-                          Select, DataTable, TableColumn, HTMLTemplateFormatter, FileInput)
+                          Select, DataTable, TableColumn, HTMLTemplateFormatter, FileInput, TextInput)
 from bokeh.layouts import column, row
 from bokeh.plotting import figure
 import pandas as pd
@@ -300,7 +300,47 @@ def train_tab_layout(engine, trained_model_storage):
     poly_s = Slider(start=1, end=5,     value=1,
                     step=1,     title="Degree / Harmonics")
     thr_s = Slider(start=0.0, end=0.5, value=0.1,
-                   step=0.01, title="Sparsity Threshold")
+                   step=0.005, title="Sparsity Threshold")
+    # ── Manual threshold input ──────────────────────────────────────────
+    # Some systems turned out to be very sensitive to the exact threshold
+    # value — the 0.005 slider step is too coarse for fine-tuning (e.g.
+    # 0.0347 vs 0.035). This TextInput lets the user type an exact value;
+    # it's two-way synced with thr_s so either control can drive the other.
+    thr_input = TextInput(value=f"{thr_s.value:.4f}", title="Or type exact threshold:", width=150)
+
+    _thr_syncing = [False]  # re-entrancy guard to prevent infinite update loops
+
+    def on_thr_slider_change(attr, old, new):
+        """Slider moved → push the new value into the text box."""
+        if _thr_syncing[0]:
+            return
+        _thr_syncing[0] = True
+        thr_input.value = f"{new:.4f}"
+        _thr_syncing[0] = False
+
+    def on_thr_input_change(attr, old, new):
+        """
+        Text box edited → validate and push into the slider. Falls back
+        silently to the last valid value if the typed text isn't a
+        parseable, in-range number (e.g. mid-typing state like "0." or
+        "-"), so the app never crashes on invalid manual input.
+        """
+        if _thr_syncing[0]:
+            return
+        try:
+            val = float(new)
+        except ValueError:
+            return
+
+        val = max(thr_s.start, min(thr_s.end, val))  # clamp to valid range
+
+        _thr_syncing[0] = True
+        thr_s.value = val
+        thr_input.value = f"{val:.4f}"
+        _thr_syncing[0] = False
+
+    thr_s.on_change('value', on_thr_slider_change)
+    thr_input.on_change('value', on_thr_input_change)
     btn_train = Button(label="TRAIN", button_type="primary",
                        height=50, width=100)
 
@@ -329,7 +369,7 @@ def train_tab_layout(engine, trained_model_storage):
     ))
 
     columns = [
-        TableColumn(field="run",        title="Run #",           width=200),
+        TableColumn(field="run",        title="Run #",           width=50),
         TableColumn(field="lib",        title="Library",         width=200),
         TableColumn(field="poly",        title="Degree",          width=100),
         TableColumn(field="thr",        title="Noise",          width=100),
@@ -809,7 +849,7 @@ def train_tab_layout(engine, trained_model_storage):
 
     top_row = row(
         column(file_select, file_input, upload_status, train_s, split_div, library_select,
-               poly_s, thr_s, row(btn_train, btn_delete), width=320),
+               poly_s, thr_s,thr_input, row(btn_train, btn_delete), width=320),
         column(p, view_div, sizing_mode="stretch_width"),
         sizing_mode="stretch_width"
     )
