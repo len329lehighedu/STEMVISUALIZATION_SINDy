@@ -42,7 +42,7 @@ class SINDyEngine:
     # ------------------------------------------------------------------
     # Fit model with random split on (X, dX) pairs 
     # ------------------------------------------------------------------
-    def fit_model_random_split(self, X, t, poly_degree, threshold, names,
+    def fit_model(self, X, t, poly_degree, threshold, names,
                                lib_type="Polynomial",
                                train_frac=0.6, random_seed=42,split_method="random",):
         """
@@ -63,7 +63,7 @@ class SINDyEngine:
         n = len(t)
         n_train = int(n * train_frac)
 
-        if split_method == "random":
+        if split_method == "random sampling":
 
             rng = np.random.default_rng(random_seed)
             indices = rng.permutation(n)
@@ -71,7 +71,7 @@ class SINDyEngine:
             train_idx = np.sort(indices[:n_train])
             val_idx   = np.sort(indices[n_train:])
 
-        elif split_method == "time":
+        elif split_method == "time-based":
 
             train_idx = np.arange(n_train)
             val_idx   = np.arange(n_train, n)

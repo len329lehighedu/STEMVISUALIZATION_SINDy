@@ -285,10 +285,10 @@ def train_tab_layout(engine, trained_model_storage):
     train_s.show_value = False
     split_select = Select(
         title="SPLIT TYPE",
-        value="Random",
+        value="Random Sampling",
         options=[
-            "Random",
-            "Time",
+            "Random Sampling",
+            "Time-based",
         ],
         width=100,
     )
@@ -701,7 +701,7 @@ def train_tab_layout(engine, trained_model_storage):
         # derivatives near a split boundary would otherwise be biased.
         try:
             model, train_idx, val_idx, m_train, m_val = \
-                engine.fit_model_random_split(
+                engine.fit_model(
                     X, t,
                     poly_degree=poly_s.value,
                     threshold=thr_s.value,
