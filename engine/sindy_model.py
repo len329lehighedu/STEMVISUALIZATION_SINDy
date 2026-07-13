@@ -44,7 +44,7 @@ class SINDyEngine:
     # ------------------------------------------------------------------
     def fit_model_random_split(self, X, t, poly_degree, threshold, names,
                                lib_type="Polynomial",
-                               train_frac=0.6, random_seed=42):
+                               train_frac=0.6, random_seed=42,split_method="random",):
         """
         Approach:
           1. Calculate dX on all data
@@ -61,12 +61,27 @@ class SINDyEngine:
 
         # Step 2: random shuffle indices
         n = len(t)
-        rng     = np.random.default_rng(random_seed)
-        indices = rng.permutation(n)
+        n_train = int(n * train_frac)
 
-        n_train    = int(n * train_frac)
-        train_idx  = np.sort(indices[:n_train])   # sort to keep order in time
-        val_idx    = np.sort(indices[n_train:])
+        if split_method == "random":
+
+            rng = np.random.default_rng(random_seed)
+            indices = rng.permutation(n)
+
+            train_idx = np.sort(indices[:n_train])
+            val_idx   = np.sort(indices[n_train:])
+
+        elif split_method == "time":
+
+            train_idx = np.arange(n_train)
+            val_idx   = np.arange(n_train, n)
+
+        else:
+            raise ValueError(
+                f"Unknown split_method '{split_method}'. "
+                "Use 'random' or 'time'."
+            )
+        
 
         X_train  = X[train_idx]
         dX_train = dX[train_idx]

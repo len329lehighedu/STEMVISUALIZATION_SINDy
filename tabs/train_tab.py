@@ -281,7 +281,17 @@ def train_tab_layout(engine, trained_model_storage):
     # (This UX choice avoids the earlier bug where two independent sliders
     # could be set to sum to less/more than 100%.)
     train_s = Slider(start=10, end=90, value=60, step=5,
-                     title="Train Split")
+                     title="")
+    train_s.show_value = False
+    split_select = Select(
+        title="SPLIT TYPE",
+        value="Random",
+        options=[
+            "Random",
+            "Time",
+        ],
+        width=100,
+    )
 
     split_div = Div(
         text="<b style='color:#247008;'>Split: Train 60% | Validation 40%</b>",
@@ -306,9 +316,11 @@ def train_tab_layout(engine, trained_model_storage):
     # value — the 0.005 slider step is too coarse for fine-tuning (e.g.
     # 0.0347 vs 0.035). This TextInput lets the user type an exact value;
     # it's two-way synced with thr_s so either control can drive the other.
-    thr_input = TextInput(value=f"{thr_s.value:.4f}", title="Or type exact threshold:", width=150)
+    thr_input = TextInput(
+        value=f"{thr_s.value:.4f}", title="Or type exact threshold:", width=150)
 
-    _thr_syncing = [False]  # re-entrancy guard to prevent infinite update loops
+    # re-entrancy guard to prevent infinite update loops
+    _thr_syncing = [False]
 
     def on_thr_slider_change(attr, old, new):
         """Slider moved → push the new value into the text box."""
@@ -484,7 +496,7 @@ def train_tab_layout(engine, trained_model_storage):
     # per state variable).
     diag_stats_div = Div(
         text="<a>Run a training session to see diagnostics.</a>",
-        styles={'font-size': '13px', 'color' : '#00000'}
+        styles={'font-size': '13px', 'color': '#00000'}
     )
 
     counter = [0]   # run counter — monotonically increasing, never reset
@@ -697,6 +709,7 @@ def train_tab_layout(engine, trained_model_storage):
                     lib_type=library_select.value,
                     train_frac=train_frac,
                     random_seed=counter[0] * 7,  # unique seed per run
+                    split_method=split_select.value.lower()
                 )
         except Exception as e:
             res_div.text = f"<span style='color:red;'>⚠ Fit error: {e}</span>"
@@ -848,8 +861,8 @@ def train_tab_layout(engine, trained_model_storage):
     # =========================================================================
 
     top_row = row(
-        column(file_select, file_input, upload_status, train_s, split_div, library_select,
-               poly_s, thr_s,thr_input, row(btn_train, btn_delete), width=320),
+        column(file_select, file_input, upload_status, split_div,train_s, split_select, library_select,
+               poly_s, thr_s, thr_input, row(btn_train, btn_delete), width=320),
         column(p, view_div, sizing_mode="stretch_width"),
         sizing_mode="stretch_width"
     )
