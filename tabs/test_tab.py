@@ -1,4 +1,28 @@
+# =============================================================================
 # tabs/test_tab.py
+#
+# PURPOSE
+# -------
+# Renders the "Test" tab of the SINDy Expert System.
+#
+# This tab answers the question the Train tab CANNOT answer on its own:
+# "Do the discovered equations actually generalize to a trajectory the
+# model has never seen?" SINDy's loss is computed on dX/dt residuals, so
+# a model can look excellent during training yet still diverge badly when
+# forward-simulated from a new initial condition — this tab is the
+# ground-truth check for that failure mode.
+#
+# Workflow:
+#   1. User picks a previously-trained model (from trained_model_storage,
+#      populated by the Train tab).
+#   2. The tab auto-suggests matching held-out test CSVs for pre-set
+#      systems, or lets the user upload their own test trajectory if the
+#      model was trained on custom data.
+#   3. For each test trajectory, the discovered ODE system is forward-
+#      integrated with scipy's solve_ivp() starting from the test file's
+#      initial condition, and the result is compared against the true
+#      trajectory (RMSE / R² per state variable + overlay plot).
+# =============================================================================
 
 from bokeh.models import ColumnDataSource, Button, Select, Div, DataTable, TableColumn, FileInput
 from bokeh.layouts import column, row
@@ -11,93 +35,154 @@ import base64
 import io
 from scipy.integrate import solve_ivp
 
+
 def test_tab_layout(engine, trained_model_storage):
-    # -------------------------------------------------------------------------
-    # 1. UI Components
-    # -------------------------------------------------------------------------
+    """
+    Build the Bokeh layout for the Test tab.
+
+    Parameters
+    ----------
+    engine : SINDyEngine
+        Shared engine instance. Not called directly in this tab — test
+        simulation calls model_instance.predict() straight from the stored
+        model — but kept in the signature for API consistency with the
+        other tabs.
+    trained_model_storage : dict
+        Shared store populated by the Train tab: {run_id: {model_instance,
+        system_name, feature_names, ...}}. Read-only from this tab.
+
+    Returns
+    -------
+    tuple(bokeh.layouts.column, callable)
+        (layout, update_model_list) — update_model_list() is called by
+        main.py whenever the user switches to this tab, so the model
+        dropdown always reflects the latest training history.
+    """
+
+    # =========================================================================
+    # SECTION 1 — MODEL SELECTION & DATA SOURCE UI
+    # Dropdown to pick a trained model, plus the (pre-set or custom) test
+    # data source for up to 2 independent test trajectories.
+    # =========================================================================
+
     csv_files = [f for f in os.listdir('data') if f.endswith('.csv')]
 
-    model_select = Select(title="SELECT MODEL (FROM HISTORY)", options=[], value="")
+    model_select  = Select(title="SELECT MODEL (FROM HISTORY)", options=[], value="")
     file_select_1 = Select(title="Test Run 1 — CSV File", options=csv_files, value="")
-    file_select_2 = Select(title="Test Run 2 — CSV File (optional)", options=["(none)"] + csv_files, value="(none)")
-    
-    # Upload widgets (hidden by default)
+    file_select_2 = Select(title="Test Run 2 — CSV File (optional)",
+                           options=["(none)"] + csv_files, value="(none)")
+
+    # Upload widgets — only shown when the selected model was trained on a
+    # custom-uploaded dataset (no matching pre-set test files exist for it).
     file_input_test1 = FileInput(accept=".csv", title="Upload Test Data 1", visible=False)
     file_input_test2 = FileInput(accept=".csv", title="Upload Test Data 2", visible=False)
 
-    # =========================================================================
-    # KEY FIX: Buffer save base64 data in memory, not using filename
-    # =========================================================================
+    # ── In-memory upload buffer ──────────────────────────────────────────
+    # Bokeh's FileInput.value only fires a change event; it does NOT persist
+    # the file content anywhere else. We cache the raw base64 string here so
+    # on_test_click() can re-decode it later without depending on widget
+    # state timing (avoids a race where the widget value changes between
+    # upload and button click).
     _upload_buffer = {
-        'test1': None,  # Save raw base64 string when upload
+        'test1': None,
         'test2': None,
     }
 
-    def get_test_filenames_list(model_run_id): 
-        if model_run_id not in trained_model_storage: return ["", "(none)"]
+    # Single unified status line — replaces the earlier per-column
+    # status_div1 / status_div2 pair, which felt visually redundant since
+    # both usually showed the same "select a model" / "test complete"
+    # message at the same time. All feedback (errors for Run 1, Run 2, or
+    # the final success message) now goes through this one Div.
+    status_div = Div(
+        text="<i>Select a model to start.</i>",
+        styles={'padding': '8px'}
+    )
+
+    def get_test_filenames_list(model_run_id):
+        """
+        Map a trained run's source system to its matching pair of held-out
+        test CSVs (generated with different initial conditions than the
+        training file — see project data-generation scripts). Returns
+        ["", "(none)"] if the run isn't found or has no known test pair.
+        """
+        if model_run_id not in trained_model_storage:
+            return ["", "(none)"]
         train_file = trained_model_storage[model_run_id].get('system_name', '')
-        if train_file == "cs_train_data.csv": return ["cs_test_data_1.csv", "cs_test_data_2.csv"]
-        if train_file == "vanderpol_train.csv": return ["vanderpol_test_1.csv", "vanderpol_test_2.csv"]
+        if train_file == "cs_train_data.csv":
+            return ["cs_test_data_1.csv", "cs_test_data_2.csv"]
+        if train_file == "vanderpol_train.csv":
+            return ["vanderpol_test_1.csv", "vanderpol_test_2.csv"]
         return ["", "(none)"]
 
     def update_ui_on_model_select(attr, old, new):
-        if not new: return
+        """
+        Fired when the user picks a model from the dropdown. Decides
+        whether to show the pre-set test-file dropdowns or the custom
+        upload widgets, and auto-fills the pre-set test filenames when
+        applicable. Also resets the upload buffer so a stale file from a
+        previously-selected custom model can't accidentally be reused.
+        """
+        if not new:
+            return
         try:
-            run_id = int(new.replace("Run #", ""))
+            run_id     = int(new.replace("Run #", ""))
             train_file = trained_model_storage[run_id].get('system_name', '')
-            is_custom = "custom" in train_file or train_file == "custom_upload"
-            
-            # Dynamic Toggle Visibility
-            file_select_1.visible = not is_custom
-            file_select_2.visible = not is_custom
+            is_custom  = "custom" in train_file or train_file == "custom_upload"
+
+            # Toggle visibility: pre-set dropdowns XOR custom upload widgets.
+            file_select_1.visible    = not is_custom
+            file_select_2.visible    = not is_custom
             file_input_test1.visible = is_custom
             file_input_test2.visible = is_custom
-            
-            # Reset buffer when change model
+
+            # Reset buffer — prevents leaking an upload from a different model.
             _upload_buffer['test1'] = None
             _upload_buffer['test2'] = None
-            status_div1.text = "<i>Select a model to start.</i>"
-            status_div2.text = "<i>Select a model to start.</i>"
-            
+            status_div.text = "<i>Select a model to start.</i>"
+
             if not is_custom:
                 targets = get_test_filenames_list(run_id)
                 file_select_1.value, file_select_2.value = targets[0], targets[1]
         except Exception as e:
+            # Non-fatal — log to server console, leave UI in its current state
+            # rather than crashing the callback.
             print(f"UI Update Error: {e}")
 
     model_select.on_change('value', update_ui_on_model_select)
-    btn_test = Button(label="TEST", button_type="primary", height=50,width=100)
-    
-    # -------------------------------------------------------------------------
-    # 2. Upload Logic — only cache base64, not reading filename
-    # -------------------------------------------------------------------------
+
+    btn_test = Button(label="TEST", button_type="primary", height=50, width=100)
+
+
+    # =========================================================================
+    # SECTION 2 — FILE UPLOAD HANDLING
+    # Caches uploaded test CSVs (as base64) so they can be decoded later
+    # inside on_test_click(), independent of widget event timing.
+    # =========================================================================
+
     def on_upload_test1(attr, old, new):
+        """Cache Test Run 1's uploaded file content (base64) on change."""
         if not new:
             return
-        _upload_buffer['test1'] = new          # cache raw base64
-        status_div1.text = "<b style='color:green;'>✅ Test file 1 ready. Click RUN TEST.</b>"
+        _upload_buffer['test1'] = new
+        status_div.text = "<b style='color:#27ae60;'>✅ Test file 1 ready. Click TEST.</b>"
 
     def on_upload_test2(attr, old, new):
+        """Cache Test Run 2's uploaded file content (base64) on change."""
         if not new:
             return
-        _upload_buffer['test2'] = new          # cache raw base64
-        status_div2.text = "<b style='color:green;'>✅ Test file 2 ready. Click RUN TEST.</b>"
+        _upload_buffer['test2'] = new
+        status_div.text = "<b style='color:#27ae60;'>✅ Test file 2 ready. Click TEST.</b>"
 
     file_input_test1.on_change('value', on_upload_test1)
     file_input_test2.on_change('value', on_upload_test2)
 
-    status_div1 = Div(
-        text="<i>Select a model to start.</i>",
-        styles={'padding': '8px'}
-    )
-    status_div2 = Div(
-        text="<i>Select a model to start.</i>",
-        styles={'padding': '8px'}
-    )
 
-    # -------------------------------------------------------------------------
-    # 3. Metrics Table & Plots
-    # -------------------------------------------------------------------------
+    # =========================================================================
+    # SECTION 3 — RESULTS DISPLAY (Metrics Table & Plots)
+    # Per-variable RMSE/R² table plus one overlay plot (true vs SINDy) for
+    # each of the two possible test trajectories.
+    # =========================================================================
+
     source_metrics = ColumnDataSource(data=dict(
         run=[], model_run=[], variable=[], rmse=[], mae=[], r2=[]
     ))
@@ -109,40 +194,177 @@ def test_tab_layout(engine, trained_model_storage):
         TableColumn(field="r2",        title="R²",       width=120),
     ], sizing_mode="stretch_width", height=300)
 
-    p1 = figure(title="Test Run 1", width=900, height=350, x_axis_label="Time (s)", sizing_mode="stretch_width")
-    p2 = figure(title="Test Run 2", width=900, height=350, x_axis_label="Time (s)", visible=False, sizing_mode="stretch_width")
+    # p2 starts invisible — only shown once Test Run 2 actually produces
+    # results, so an unused second plot doesn't clutter the layout.
+    p1 = figure(title="Test Run 1", width=900, height=350,
+               x_axis_label="Time (s)", sizing_mode="stretch_width")
+    p2 = figure(title="Test Run 2", width=900, height=350,
+               x_axis_label="Time (s)", visible=False, sizing_mode="stretch_width")
 
-    # -------------------------------------------------------------------------
-    # 4. Core test runner — use direct df instead of csv path
-    # -------------------------------------------------------------------------
+    # ── ROBUSTNESS FIX ──────────────────────────────────────────────────
+    # Category10[10] only has 10 distinct colors. The original indexing
+    # scheme (colors[i*2], colors[i*2+1]) silently assumed at most 5 state
+    # variables — a 6th variable (i=5) would index colors[10], which is out
+    # of range and raises IndexError, crashing the whole test callback.
+    # We fix this by wrapping every index with `% len(colors)` so the
+    # palette cycles instead of crashing on systems with more variables
+    # (e.g. a 3-mass coupled system has 6 states: x1,v1,x2,v2,x3,v3).
+    _TEST_COLORS = Category10[10]
+
+
+    # =========================================================================
+    # SECTION 4 — DATA LOADING HELPERS
+    # Two symmetric loaders: one for pre-set files on disk, one for
+    # user-uploaded base64 payloads. Both return (DataFrame, error_message)
+    # and both validate the data for NaN/Inf before handing it back, so a
+    # malformed CSV fails fast with a clear message instead of silently
+    # propagating into solve_ivp and producing a cryptic numerical error.
+    # =========================================================================
+
+    def _validate_dataframe(df):
+        """
+        Sanity-check a loaded test DataFrame.
+
+        ── ROBUSTNESS FIX ──
+        Previously, a CSV with missing values, non-numeric cells, or an
+        Inf value would pass silently through pd.read_csv().astype(float)
+        (NaN) or raise a confusing low-level error deep inside solve_ivp.
+        We now check explicitly and return a clear, user-facing message.
+        """
+        if df.shape[1] < 2:
+            return "CSV must have at least 2 columns: time + one state variable."
+        if df.isnull().values.any():
+            return "CSV contains missing/NaN values — please clean the data first."
+        if not np.isfinite(df.values).all():
+            return "CSV contains infinite values — please check the data."
+        return None
+
+    def _load_df_from_select(sel_value):
+        """Load a DataFrame from a pre-set CSV file living in data/."""
+        path = os.path.join('data', sel_value)
+        if not os.path.exists(path):
+            return None, f"File {sel_value} missing"
+        try:
+            df = pd.read_csv(path).astype(np.float64)
+        except Exception as e:
+            return None, f"Could not parse CSV: {e}"
+        err = _validate_dataframe(df)
+        if err:
+            return None, err
+        return df, None
+
+    def _load_df_from_buffer(b64_data):
+        """Decode a cached base64 upload payload into a DataFrame."""
+        try:
+            decoded = base64.b64decode(b64_data)
+            df = pd.read_csv(io.BytesIO(decoded)).astype(np.float64)
+        except Exception as e:
+            return None, f"Could not parse uploaded CSV: {e}"
+        err = _validate_dataframe(df)
+        if err:
+            return None, err
+        return df, None
+
+
+    # =========================================================================
+    # SECTION 5 — CORE TEST RUNNER
+    # Forward-simulates the discovered SINDy equations from the test file's
+    # initial condition using scipy's solve_ivp, then computes per-variable
+    # error metrics against the true (measured) trajectory.
+    # =========================================================================
+
     def _run_single_test(fig, df, label):
-        """Run test from DataFrame (no need for file path)."""
+        """
+        Run one test trajectory through the currently-selected model and
+        plot the result on `fig`.
+
+        Key idea: this is a genuine out-of-sample check — the equations
+        were fit on TRAINING data, but here they are numerically integrated
+        (not just evaluated pointwise) starting only from the test file's
+        x(0), so any error in the discovered coefficients compounds over
+        time exactly the way it would in a real deployment scenario.
+
+        Parameters
+        ----------
+        fig : bokeh.plotting.figure
+            Target plot (p1 or p2) to draw the true-vs-predicted overlay on.
+        df : pandas.DataFrame
+            Test trajectory — first column is time, remaining columns are
+            state variables in the same order used during training.
+        label : str
+            Human-readable label for this run (currently only used for
+            potential future logging — not rendered directly).
+
+        Returns
+        -------
+        tuple(list[dict] | None, str | None)
+            (rows, error_message) — rows is a list of per-variable metric
+            dicts on success; error_message is set (rows=None) on failure
+            (e.g. dimension mismatch, solve_ivp not converging, or an
+            exception raised inside the model's predict() call).
+        """
         t = df.iloc[:, 0].values
         X = df.iloc[:, 1:].values
+        n_test_vars = X.shape[1]
+
+        # ── ROBUSTNESS FIX ──────────────────────────────────────────────
+        # If the test CSV has a different number of state variables than
+        # the model was trained on, model_instance.predict() will raise a
+        # low-level sklearn/numpy shape-mismatch error deep inside
+        # solve_ivp's internal loop, which is confusing to a non-technical
+        # user. We check this up front and fail with a clear message.
+        n_model_vars = getattr(model_instance, "n_features_in_", n_test_vars)
+        if n_test_vars != n_model_vars:
+            return None, (f"Variable count mismatch: test file has "
+                          f"{n_test_vars} state variable(s), but the "
+                          f"selected model was trained on {n_model_vars}.")
 
         def rhs(t_val, x):
+            # model_instance.predict expects a 2D array of shape (1, n_features);
+            # solve_ivp passes/expects flat 1D state vectors, hence the reshape/flatten.
             return model_instance.predict(np.array(x).reshape(1, -1)).flatten()
 
-        sol = solve_ivp(rhs, (t[0], t[-1]), X[0, :], t_eval=t, method='RK45')
+        # ── ROBUSTNESS FIX ──────────────────────────────────────────────
+        # solve_ivp does not catch exceptions raised inside the RHS
+        # function — if predict() throws (e.g. due to a still-mismatched
+        # shape, or a NaN produced during integration), the exception
+        # propagates uncaught and crashes the entire Bokeh callback,
+        # taking down the whole Test tab. We wrap the call so any failure
+        # becomes a normal, user-visible error message instead.
+        try:
+            sol = solve_ivp(rhs, (t[0], t[-1]), X[0, :], t_eval=t, method='RK45')
+        except Exception as e:
+            return None, f"Simulation failed: {e}"
+
         if not sol.success:
             return None, sol.message
 
-        # Refresh plot
+        # Clear any previous overlay before drawing the new one.
         fig.renderers = []
         if fig.legend:
             fig.legend.items = []
 
-        colors = Category10[10]
         rows = []
         for i, vname in enumerate(df.columns[1:]):
-            fig.scatter(t, X[:, i], color=colors[i * 2],     alpha=0.3, legend_label=f"{vname} (True)")
-            fig.line(   t, sol.y[i], color=colors[i * 2 + 1], line_width=2, legend_label=f"{vname} (SINDy)")
+            # ── ROBUSTNESS FIX ──
+            # Wrap indices with modulo so the palette cycles instead of
+            # raising IndexError for systems with more than 5 variables.
+            c_true = _TEST_COLORS[(i * 2)     % len(_TEST_COLORS)]
+            c_pred = _TEST_COLORS[(i * 2 + 1) % len(_TEST_COLORS)]
+
+            # True (measured) trajectory as scattered points.
+            fig.scatter(t, X[:, i], color=c_true, alpha=0.3, legend_label=f"{vname} (True)")
+            # SINDy-simulated trajectory as a solid line.
+            fig.line(   t, sol.y[i], color=c_pred, line_width=2, legend_label=f"{vname} (SINDy)")
 
             res = X[:, i] - sol.y[i]
-            r2  = 1 - (np.sum(res**2) / np.sum((X[:, i] - np.mean(X[:, i]))**2))
+            ss_tot = np.sum((X[:, i] - np.mean(X[:, i])) ** 2)
+            # Guard against a degenerate constant true-trajectory (ss_tot=0),
+            # which would otherwise produce a division-by-zero R² of inf/NaN.
+            r2 = 1 - (np.sum(res ** 2) / ss_tot) if ss_tot > 0 else float('nan')
             rows.append({
                 'variable': vname,
-                'rmse':     f"{np.sqrt(np.mean(res**2)):.6f}",
+                'rmse':     f"{np.sqrt(np.mean(res ** 2)):.6f}",
                 'r2':       f"{r2:.4f}",
             })
 
@@ -150,54 +372,60 @@ def test_tab_layout(engine, trained_model_storage):
         fig.legend.location     = "top_right"
         return rows, None
 
-    def _load_df_from_select(sel_value):
-        """Load DataFrame from file on local machine (preset CSV)."""
-        path = os.path.join('data', sel_value)
-        if not os.path.exists(path):
-            return None, f"File {sel_value} missing"
-        return pd.read_csv(path).astype(np.float64), None
 
-    def _load_df_from_buffer(b64_data):
-        """Load DataFrame from base64 buffer (uploaded file)."""
-        try:
-            decoded = base64.b64decode(b64_data)
-            df = pd.read_csv(io.BytesIO(decoded)).astype(np.float64)
-            return df, None
-        except Exception as e:
-            return None, str(e)
+    # =========================================================================
+    # SECTION 6 — RUN TEST CALLBACK
+    # Orchestrates loading both test trajectories (pre-set or uploaded),
+    # running _run_single_test on each, and aggregating results into the
+    # shared metrics table.
+    # =========================================================================
 
-    # -------------------------------------------------------------------------
-    # 5. RUN TEST callback
-    # -------------------------------------------------------------------------
+    # Placeholder — populated inside on_test_click() and read via `nonlocal`
+    # from _run_single_test's closure (rhs()) during the solve_ivp call.
+    model_instance = None
+
     def on_test_click():
         if not model_select.value:
+            status_div.text = "<b style='color:red;'>⚠️ Please select a model first.</b>"
             return
 
         run_id = int(model_select.value.replace("Run #", ""))
-        model_data = trained_model_storage[run_id]
+        model_data = trained_model_storage.get(run_id)
 
-        # Use nonlocal model_instance so _run_single_test can get access to
+        # ── ROBUSTNESS FIX ──────────────────────────────────────────────
+        # Defensive check in case the selected run was deleted from the
+        # leaderboard (Train tab) between selecting it here and pressing
+        # TEST — avoids a raw KeyError/AttributeError crash.
+        if model_data is None or model_data.get('model_instance') is None:
+            status_div.text = "<b style='color:red;'>⚠️ Selected model is no longer available. Please pick another.</b>"
+            return
+
+        # Bind the model instance for this test run so _run_single_test's
+        # inner rhs() closure can access it.
         nonlocal model_instance
         model_instance = model_data['model_instance']
 
         run_id_str = f"#{run_id}"
         res_data   = {'run': [], 'model_run': [], 'variable': [], 'rmse': [], 'r2': []}
+        messages   = []  # collects per-run error/success text for status_div
 
-        # --- Test Run 1 ---
+        # ── Test Run 1 (required) ───────────────────────────────────────
         is_custom = file_input_test1.visible
         if is_custom:
             if not _upload_buffer['test1']:
-                status_div1.text = "<b style='color:red;'>⚠️ Please upload Test file 1 first.</b>"
+                status_div.text = "<b style='color:red;'>⚠️ Please upload Test file 1 first.</b>"
                 return
             df, err = _load_df_from_buffer(_upload_buffer['test1'])
         else:
             df, err = _load_df_from_select(file_select_1.value)
 
         if err:
-            status_div1.text = f"<b style='color:red;'>⚠️ Run 1 error: {err}</b>"
+            messages.append(f"⚠️ Run 1 error: {err}")
         elif df is not None:
             rows, err = _run_single_test(p1, df, "Run 1")
-            if rows:
+            if err:
+                messages.append(f"⚠️ Run 1 error: {err}")
+            elif rows:
                 p1.visible = True
                 for r in rows:
                     res_data['variable'].append(r['variable'])
@@ -206,21 +434,23 @@ def test_tab_layout(engine, trained_model_storage):
                     res_data['run'].append("Run 1")
                     res_data['model_run'].append(run_id_str)
 
-        # --- Test Run 2 ---
+        # ── Test Run 2 (optional) ───────────────────────────────────────
         if is_custom:
             if _upload_buffer['test2']:
                 df2, err2 = _load_df_from_buffer(_upload_buffer['test2'])
             else:
-                df2, err2 = None, None   # optional
+                df2, err2 = None, None  # user chose not to provide a 2nd test file
         else:
             df2, err2 = _load_df_from_select(file_select_2.value) \
                 if file_select_2.value != "(none)" else (None, None)
 
         if err2:
-            status_div2.text = f"<b style='color:red;'>⚠️ Run 2 error: {err2}</b>"
+            messages.append(f"⚠️ Run 2 error: {err2}")
         elif df2 is not None:
             rows2, err2 = _run_single_test(p2, df2, "Run 2")
-            if rows2:
+            if err2:
+                messages.append(f"⚠️ Run 2 error: {err2}")
+            elif rows2:
                 p2.visible = True
                 for r in rows2:
                     res_data['variable'].append(r['variable'])
@@ -230,36 +460,53 @@ def test_tab_layout(engine, trained_model_storage):
                     res_data['model_run'].append(run_id_str)
 
         source_metrics.data = res_data
-        if not err and not err2:
-            status_div1.text = "<b style='color:247008;'>✅ Test complete!</b>"
-            status_div2.text = "<b style='color:247008;'>✅ Test complete!</b>"
 
-    # Placeholder for _run_single_test
-    model_instance = None
+        # ── Build the final status message ───────────────────────────────
+        if messages:
+            status_div.text = "<b style='color:red;'>" + "<br>".join(messages) + "</b>"
+        else:
+            status_div.text = "<b style='color:#27ae60;'>✅ Test complete!</b>"
+
     btn_test.on_click(on_test_click)
 
-    # -------------------------------------------------------------------------
-    # 6. update_model_list (called from main app)
-    # -------------------------------------------------------------------------
+
+    # =========================================================================
+    # SECTION 7 — EXTERNAL HOOK (called by main.py on tab switch)
+    # Keeps the model dropdown and pre-set file dropdowns fresh whenever
+    # the user navigates to this tab, since new runs/files may have been
+    # added since the tab was last visited.
+    # =========================================================================
+
     def update_model_list():
+        """
+        Refresh model_select options from trained_model_storage, and
+        refresh the pre-set CSV dropdowns from the data/ directory.
+        Called externally (from main.py) on every switch to this tab —
+        NOT wired to a Bokeh event, since there is no "tab became active"
+        signal for a plain layout composition.
+        """
         opts = [f"Run #{i}" for i in sorted(trained_model_storage.keys())]
         model_select.options = opts
         if opts and not model_select.value:
             model_select.value = opts[-1]
+
         f_list = [f for f in os.listdir('data') if f.endswith('.csv')]
         file_select_1.options = f_list
         file_select_2.options = ["(none)"] + f_list
 
-    # -------------------------------------------------------------------------
-    # 7. Layout
-    # -------------------------------------------------------------------------
+
+    # =========================================================================
+    # SECTION 8 — LAYOUT ASSEMBLY
+    # =========================================================================
+
     layout = column(
         Div(text="<h3>🧪 Test Evaluation</h3>"),
         row(
-            column(model_select,btn_test),
-            column(file_select_1, file_input_test1,status_div1),
-            column(file_select_2, file_input_test2,status_div2),
+            column(model_select, btn_test),
+            column(file_select_1, file_input_test1),
+            column(file_select_2, file_input_test2),
         ),
+        status_div,
         metrics_table, p1, p2,
         sizing_mode="stretch_width"
     )
