@@ -192,10 +192,10 @@ d(x)/dt =  1.003 v
 d(v)/dt = -0.993 x  +  1.488 v  -  1.488 x² v
 ```
 
-Compared to the true equations:
+Compared to the true equations (used to generate data):
 ```
 dx/dt = v
-dv/dt = μ(1 − x²)v − x        (μ = 1)
+dv/dt = μ(1 − x²)v − x        (μ = 1.5) 
 ```
 
 ✅ Exact recovery.
