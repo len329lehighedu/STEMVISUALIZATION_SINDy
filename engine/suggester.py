@@ -1,4 +1,4 @@
-# engine/ai_suggester.py
+# engine/suggester.py
 #
 # PURPOSE
 # -------
