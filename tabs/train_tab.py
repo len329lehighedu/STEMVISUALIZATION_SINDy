@@ -429,7 +429,7 @@ def train_tab_layout(engine, trained_model_storage):
     # trajectory for the currently-viewed run.
     # =========================================================================
 
-    p = figure(title="Model Result", height=400, sizing_mode="stretch_width")
+    p = figure(title="Model Result", height=430, sizing_mode="stretch_width")
     # Empty invisible glyph forces Bokeh to allocate a renderer/legend slot
     # immediately, avoiding a "plot has zero renderers" warning on first load.
     p.scatter([], [], alpha=0)
