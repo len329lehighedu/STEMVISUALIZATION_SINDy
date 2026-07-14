@@ -26,6 +26,170 @@ import os
 import copy
 import base64
 import io
+import re
+from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
+
+# =============================================================================
+# AUTO-EXPORT: on-disk leaderboard log
+#
+# Mirrors the in-app "TRAINING HISTORY" DataTable (Section 4) 1:1, column
+# for column, but persisted to an .xlsx file on every successful Train click
+# so results survive app restarts / server reloads. Kept as a small,
+# self-contained block (no dependency on Bokeh widgets) so it can be reused
+# or moved to its own module later without touching the tab-building code.
+# =============================================================================
+
+# ── Backend switch: "excel" (default, on-disk .xlsx) or "gsheet" (Google
+#    Sheets, via a service account). Set with an env var so no code change
+#    is needed to switch: SINDY_LOG_BACKEND=gsheet
+LOG_BACKEND = os.environ.get("SINDY_LOG_BACKEND", "excel").strip().lower()
+
+LOG_DIR = "logs"
+LOG_FILE_PATH = os.path.join(LOG_DIR, "training_history_log.xlsx")
+LOG_SHEET_NAME = "Training History"
+
+
+# Same column set/order as the on-screen leaderboard (`columns` in Section 4).
+# "Data File" records which dataset/system produced the run, for context.
+LOG_HEADERS = [
+    "Run #", "Data File", "Split Type", "Library", "Degree", "Threshold",
+    "Train R2 (dX)", "Train RMSE (dX)", "Train MAE (dX)",
+    "Val R2 (dX)", "Val RMSE (dX)", "Val MAE (dX)",
+    "RMSE Diff", "Identified Equations",
+]
+# Column widths chosen to keep roughly the same visual proportions as the
+# in-app DataTable's pixel widths, scaled down to Excel's character units.
+LOG_COL_WIDTHS = [8, 22, 16, 12, 9, 11, 14, 15, 14, 14, 15, 14, 12, 65]
+
+
+_HEADER_FILL = PatternFill(start_color="1F4E79",
+                           end_color="1F4E79", fill_type="solid")
+_HEADER_FONT = Font(bold=True, color="FFFFFF")
+_ZEBRA_FILL = PatternFill(start_color="F2F2F2",
+                          end_color="F2F2F2", fill_type="solid")
+_THIN_BORDER = Border(*(Side(style="thin", color="BFBFBF"),) * 4)
+
+
+def _strip_html(html_text):
+    """
+    Turn the HTML-formatted equation string used in the in-app DataTable
+    (`formatted_eqs_html`, e.g. "<b>(1)</b> dx0/dt = ...<br>...") into
+    plain, newline-separated text suitable for an Excel cell.
+    """
+    text = re.sub(r"<br\s*/?>", "\n", html_text)
+    text = re.sub(r"<[^>]+>", "", text)
+    return text.strip()
+
+
+def _ensure_log_workbook():
+    """
+    Open the log workbook if it already exists, otherwise create it with a
+    styled header row (same dark-blue header used across the app's other
+    tables) and sensible column widths. Called once per export so the file
+    is always self-healing even if it was deleted/moved between runs.
+    """
+    os.makedirs(LOG_DIR, exist_ok=True)
+
+    if os.path.exists(LOG_FILE_PATH):
+        wb = load_workbook(LOG_FILE_PATH)
+        if LOG_SHEET_NAME not in wb.sheetnames:
+            ws = wb.create_sheet(LOG_SHEET_NAME)
+        else:
+            return wb
+    else:
+        wb = Workbook()
+        ws = wb.active
+        ws.title = LOG_SHEET_NAME
+
+    ws.append(LOG_HEADERS)
+    for col_idx in range(1, len(LOG_HEADERS) + 1):
+        cell = ws.cell(row=1, column=col_idx)
+        cell.fill = _HEADER_FILL
+        cell.font = _HEADER_FONT
+        cell.alignment = Alignment(vertical="center", wrap_text=True)
+        cell.border = _THIN_BORDER
+
+    for col_idx, width in enumerate(LOG_COL_WIDTHS, start=1):
+        ws.column_dimensions[get_column_letter(col_idx)].width = width
+
+    ws.freeze_panes = "A2"
+    return wb
+
+
+def _export_to_excel(row_values):
+    wb = _ensure_log_workbook()
+    ws = wb[LOG_SHEET_NAME]
+    row_idx = ws.max_row + 1
+
+    ws.append(row_values)
+
+    # Zebra striping + wrap text, matching the in-app table's look.
+    if row_idx % 2 == 0:
+        for col_idx in range(1, len(LOG_HEADERS) + 1):
+            ws.cell(row=row_idx, column=col_idx).fill = _ZEBRA_FILL
+    for col_idx in range(1, len(LOG_HEADERS) + 1):
+        cell = ws.cell(row=row_idx, column=col_idx)
+        cell.border = _THIN_BORDER
+        if col_idx == len(LOG_HEADERS):
+            cell.alignment = Alignment(wrap_text=True, vertical="top")
+
+    wb.save(LOG_FILE_PATH)
+
+
+
+def export_run_to_log(run_id, data_file, split_type, lib, poly_degree, threshold,
+                      train_r2, train_rmse, train_mae,
+                      val_r2, val_rmse, val_mae, rmse_diff,
+                      equations_html):
+    """
+    Append one completed training run to the leaderboard log — either an
+    on-disk .xlsx (default) or a Google Sheet, depending on LOG_BACKEND.
+    Called once per successful Train click (see on_train_click, Section 7),
+    right after the run is added to the in-app DataTable, so the two stay
+    in lockstep. Never raises — a logging failure must not break training.
+    """
+    row_values = [
+        run_id, data_file, split_type, lib, poly_degree, threshold,
+        round(train_r2, 4), round(train_rmse, 6), round(train_mae, 6),
+        round(val_r2, 4), round(val_rmse, 6), round(val_mae, 6),
+        round(rmse_diff, 6), _strip_html(equations_html),
+    ]
+    try:
+        _export_to_excel(row_values)
+    except Exception as e:
+        # Logging must never take down the training flow.
+        target = "Google Sheet" if LOG_BACKEND == "gsheet" else LOG_FILE_PATH
+        print(f"[WARN] Could not write training log to {target}: {e}")
+
+
+def reset_log():
+    """
+    Wipe the training history log back to just the header row. Works for
+    whichever backend is currently configured (LOG_BACKEND).
+    """
+    if os.path.exists(LOG_FILE_PATH):
+        os.remove(LOG_FILE_PATH)
+        print(f"[OK] Deleted {LOG_FILE_PATH}")
+        _ensure_log_workbook().save(LOG_FILE_PATH)
+        print(f"[OK] Recreated empty log at {LOG_FILE_PATH}")
+
+
+if __name__ == "__main__":
+    # ── Terminal command to reset the log ───────────────────────────────
+    #   python tabs/train_tab.py --reset-log
+    # Works against whichever backend SINDY_LOG_BACKEND points to.
+    import argparse
+    parser = argparse.ArgumentParser(
+        description="SINDy training log utilities")
+    parser.add_argument("--reset-log", action="store_true",
+                        help="Clear the training history log and recreate it with just the header row.")
+    args = parser.parse_args()
+    if args.reset_log:
+        reset_log()
+    else:
+        parser.print_help()
 
 
 def train_tab_layout(engine, trained_model_storage):
@@ -218,6 +382,10 @@ def train_tab_layout(engine, trained_model_storage):
 
     file_select = Select(title="SELECT SYSTEM", options=system_options,
                          value="cs_train_data.csv")
+    # value -> friendly label lookup, used to populate the "Data File"
+    # column in the leaderboard (e.g. "cs_train_data.csv" -> "Coupled
+    # Spring-Mass (Pre-set)").
+    _SYSTEM_LABELS = dict(system_options)
 
     # File upload widget — hidden until the user picks "Upload your own data".
     file_input = FileInput(accept=".csv", visible=False)
@@ -369,28 +537,48 @@ def train_tab_layout(engine, trained_model_storage):
     """
     eqn_formatter = HTMLTemplateFormatter(template=eqn_template)
 
+    # Small HTML template for the merged Train/Val metric cells (Section 4
+    # "compact" view) — packs R²/RMSE/MAE into 3 short lines instead of 3
+    # separate wide columns, so the leaderboard needs a lot less horizontal
+    # space per run.
+    metrics_template = """
+    <div style="white-space: normal; line-height: 1.4; padding: 4px 0;
+                font-family: 'Courier New', monospace; font-size: 11px;">
+        <%= value %>
+    </div>
+    """
+    metrics_formatter = HTMLTemplateFormatter(template=metrics_template)
+
+    def _fmt_metrics_html(label, color, r2, rmse, mae):
+        return (
+            f"<b style='color:{color};'>{label}</b><br>"
+            f"R²: {r2:.4f}<br>RMSE: {rmse:.6f}<br>MAE: {mae:.6f}"
+        )
+
+    # "system" records which dataset/file produced the run (pre-set name or
+    # the uploaded filename) so old runs stay interpretable at a glance.
     source_history = ColumnDataSource(data=dict(
-        run=[], split=[], lib=[], poly=[], thr=[],
-        train_r2=[], train_rmse=[], train_mae=[],
-        val_r2=[],   val_rmse=[],   val_mae=[],
+        run=[], system=[], split=[], lib=[], poly=[], thr=[],
+        train_metrics=[], val_metrics=[],
         rmse_diff=[], equations=[]
     ))
 
+    # Train/Val each collapse into a single merged HTML cell (R²+RMSE+MAE
+    # stacked) instead of 6 separate wide numeric columns.
     columns = [
-        TableColumn(field="run",        title="Run #",           width=100),
-        TableColumn(field="split",        title="Split Type",           width=250),
-        TableColumn(field="lib",        title="Library",         width=200),
-        TableColumn(field="poly",        title="Degree",          width=100),
-        TableColumn(field="thr",        title="Noise",          width=100),
-        TableColumn(field="train_r2",   title="Train R² (dX)",   width=250),
-        TableColumn(field="train_rmse", title="Train RMSE (dX)", width=250),
-        TableColumn(field="train_mae",  title="Train MAE (dX)",  width=250),
-        TableColumn(field="val_r2",     title="Val R² (dX)",     width=250),
-        TableColumn(field="val_rmse",   title="Val RMSE (dX)",   width=250),
-        TableColumn(field="val_mae",    title="Val MAE (dX)",    width=250),
-        TableColumn(field="rmse_diff",  title="RMSE Diff",       width=250),
-        TableColumn(field="equations",  title="Identified Equations",
-                    width=1000, formatter=eqn_formatter),
+        TableColumn(field="run",    title="Run #",      width=70),
+        TableColumn(field="system", title="Data File",  width=170),
+        TableColumn(field="split",  title="Split Type", width=140),
+        TableColumn(field="lib",    title="Library",    width=110),
+        TableColumn(field="poly",   title="Degree",     width=70),
+        TableColumn(field="thr",    title="Threshold",  width=90),
+        TableColumn(field="train_metrics", title="Train Metrics",
+                    width=170, formatter=metrics_formatter),
+        TableColumn(field="val_metrics",   title="Val Metrics",
+                    width=170, formatter=metrics_formatter),
+        TableColumn(field="rmse_diff", title="RMSE Diff", width=100),
+        TableColumn(field="equations", title="Identified Equations",
+                    width=900, formatter=eqn_formatter),
     ]
 
     history_table = DataTable(
@@ -678,10 +866,16 @@ def train_tab_layout(engine, trained_model_storage):
             decoded = base64.b64decode(file_input.value)
             f = io.BytesIO(decoded)
             df = pd.read_csv(f).astype(np.float64)
+            # FileInput.filename is only populated in newer Bokeh versions —
+            # fall back to a generic label so the leaderboard never shows blank.
+            data_file_label = getattr(
+                file_input, 'filename', None) or "Custom Upload"
         else:
             # Load one of the bundled pre-set system files.
             path = os.path.join('data', file_select.value)
             df = pd.read_csv(path).astype(np.float64)
+            data_file_label = _SYSTEM_LABELS.get(
+                file_select.value, file_select.value)
 
         counter[0] += 1  # unique, ever-increasing run ID
 
@@ -738,20 +932,33 @@ def train_tab_layout(engine, trained_model_storage):
         # ── 7. Append a new row to the leaderboard ──────────────────────────
         new_entry = {
             'run':        [counter[0]],
+            'system':     [data_file_label],
             'split':      [split_select.value],
             'lib':        [library_select.value],
             'poly':       [poly_s.value],
             'thr':        [thr_s.value],
-            'train_r2':   [f"{t_r2:.4f}"],
-            'train_rmse': [f"{t_rmse:.6f}"],
-            'train_mae':  [f"{t_mae:.6f}"],
-            'val_r2':     [f"{v_r2:.4f}"],
-            'val_rmse':   [f"{v_rmse:.6f}"],
-            'val_mae':    [f"{v_mae:.6f}"],
+            'train_metrics': [_fmt_metrics_html("TRAIN", "#1f77b4", t_r2, t_rmse, t_mae)],
+            'val_metrics':   [_fmt_metrics_html("VAL", "#ff7f0e", v_r2, v_rmse, v_mae)],
             'rmse_diff':  [f"{rmse_diff:.6f}"],
             'equations':  [formatted_eqs_html],
         }
         source_history.stream(new_entry)
+
+        # ── 7b. Mirror this run into the leaderboard log (Excel or Google
+        #         Sheet, per LOG_BACKEND) — same columns/order as above, so
+        #         results survive app restarts and can be opened outside Bokeh.
+        export_run_to_log(
+            run_id=counter[0],
+            data_file=data_file_label,
+            split_type=split_select.value,
+            lib=library_select.value,
+            poly_degree=poly_s.value,
+            threshold=thr_s.value,
+            train_r2=t_r2, train_rmse=t_rmse, train_mae=t_mae,
+            val_r2=v_r2, val_rmse=v_rmse, val_mae=v_mae,
+            rmse_diff=rmse_diff,
+            equations_html=formatted_eqs_html,
+        )
 
         # ── 8. Persist everything needed to reconstruct this run later ─────
         # (used by render_plot/_render_diag_plots on row-select, and by the
