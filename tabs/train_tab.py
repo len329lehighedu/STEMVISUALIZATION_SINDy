@@ -566,19 +566,19 @@ def train_tab_layout(engine, trained_model_storage):
     # Train/Val each collapse into a single merged HTML cell (R²+RMSE+MAE
     # stacked) instead of 6 separate wide numeric columns.
     columns = [
-        TableColumn(field="run",    title="Run #",      width=70),
-        TableColumn(field="system", title="Data File",  width=170),
-        TableColumn(field="split",  title="Split Type", width=140),
-        TableColumn(field="lib",    title="Library",    width=110),
-        TableColumn(field="poly",   title="Degree",     width=70),
-        TableColumn(field="thr",    title="Threshold",  width=90),
+        TableColumn(field="run",    title="Run #",      width=100),
+        TableColumn(field="system", title="Data File",  width=300),
+        TableColumn(field="split",  title="Split Type", width=300),
+        TableColumn(field="lib",    title="Library",    width=200),
+        TableColumn(field="poly",   title="Degree",     width=200),
+        TableColumn(field="thr",    title="Threshold",  width=200),
         TableColumn(field="train_metrics", title="Train Metrics",
-                    width=170, formatter=metrics_formatter),
+                    width=200, formatter=metrics_formatter),
         TableColumn(field="val_metrics",   title="Val Metrics",
-                    width=170, formatter=metrics_formatter),
-        TableColumn(field="rmse_diff", title="RMSE Diff", width=100),
+                    width=200, formatter=metrics_formatter),
+        TableColumn(field="rmse_diff", title="RMSE Diff", width=200),
         TableColumn(field="equations", title="Identified Equations",
-                    width=900, formatter=eqn_formatter),
+                    width=1000, formatter=eqn_formatter),
     ]
 
     history_table = DataTable(
