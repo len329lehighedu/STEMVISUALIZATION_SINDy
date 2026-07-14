@@ -282,6 +282,13 @@ def train_tab_layout(engine, trained_model_storage):
     # could be set to sum to less/more than 100%.)
     train_s = Slider(start=10, end=90, value=60, step=5,
                      title="Train/Validation Split")
+    def on_train_s_change(attr, old, new):
+        """Keep the human-readable split label in sync with the slider."""
+        train_s.title = f"SPLIT: TRAIN {new}% | VALIDATION {100 - new}%"
+        
+    train_s.on_change('value', on_train_s_change)
+    # Initialize title immediately
+    on_train_s_change(None, None, train_s.value)
     train_s.show_value = False
     split_select = Select(
         title="SPLIT TYPE",
@@ -294,12 +301,6 @@ def train_tab_layout(engine, trained_model_storage):
     )
 
 
-    def on_train_s_change(attr, old, new):
-        """Keep the human-readable split label in sync with the slider."""
-        train_s.title = f"SPLIT: TRAIN {new}% | VALIDATION {100 - new}%"
-        
-
-    train_s.on_change('value', on_train_s_change)
 
     poly_s = Slider(start=1, end=5,     value=1,
                     step=1,     title="DEGREE / HARMONICS")
@@ -368,7 +369,7 @@ def train_tab_layout(engine, trained_model_storage):
     eqn_formatter = HTMLTemplateFormatter(template=eqn_template)
 
     source_history = ColumnDataSource(data=dict(
-        run=[], lib=[], poly=[], thr=[],
+        run=[], split=[], lib=[], poly=[], thr=[],
         train_r2=[], train_rmse=[], train_mae=[],
         val_r2=[],   val_rmse=[],   val_mae=[],
         rmse_diff=[], equations=[]
@@ -376,6 +377,7 @@ def train_tab_layout(engine, trained_model_storage):
 
     columns = [
         TableColumn(field="run",        title="Run #",           width=100),
+        TableColumn(field="split",        title="Split Type",           width=250),
         TableColumn(field="lib",        title="Library",         width=200),
         TableColumn(field="poly",        title="Degree",          width=100),
         TableColumn(field="thr",        title="Noise",          width=100),
@@ -735,6 +737,7 @@ def train_tab_layout(engine, trained_model_storage):
         # ── 7. Append a new row to the leaderboard ──────────────────────────
         new_entry = {
             'run':        [counter[0]],
+            'split':      [split_select.value],
             'lib':        [library_select.value],
             'poly':       [poly_s.value],
             'thr':        [thr_s.value],
@@ -755,6 +758,7 @@ def train_tab_layout(engine, trained_model_storage):
         trained_model_storage[counter[0]] = {
             'run_id':             counter[0],
             'system_name':        file_select.value,
+            'split_strategy':     split_select.value,
             # snapshot — engine.model gets overwritten on next Train
             'model_instance':     copy.deepcopy(engine.model),
             'lib_type':           library_select.value,
