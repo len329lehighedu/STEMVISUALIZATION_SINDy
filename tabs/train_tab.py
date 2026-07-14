@@ -280,16 +280,22 @@ def train_tab_layout(engine, trained_model_storage):
     # Single slider controls the split; validation % is always 100 - train%.
     # (This UX choice avoids the earlier bug where two independent sliders
     # could be set to sum to less/more than 100%.)
-    train_s = Slider(start=10, end=90, value=60, step=5,
-                     title=f"TRAIN/VALIDATION SPLIT")
+    train_s = Slider(
+        start=10,
+        end=90,
+        value=60,
+        step=5,
+        title="Train/Validation Split",
+    )
     train_s.show_value = False
-
     def on_train_s_change(attr, old, new):
         """Keep the human-readable split label in sync with the slider."""
         train_s.title = f"SPLIT: TRAIN {new}% | VALIDATION {100 - new}%"
-    
 
-    train_s.on_change('value', on_train_s_change)
+    train_s.on_change("value", on_train_s_change)
+
+    # Initialize title immediately
+    on_train_s_change(None, None, train_s.value)
 
     poly_s = Slider(start=1, end=5,     value=1,
                     step=1,     title="DEGREE / HARMONICS")
@@ -300,9 +306,11 @@ def train_tab_layout(engine, trained_model_storage):
     # value — the 0.005 slider step is too coarse for fine-tuning (e.g.
     # 0.0347 vs 0.035). This TextInput lets the user type an exact value;
     # it's two-way synced with thr_s so either control can drive the other.
-    thr_input = TextInput(value=f"{thr_s.value:.4f}", title="Or type exact threshold:", width=150)
+    thr_input = TextInput(
+        value=f"{thr_s.value:.4f}", title="Or type exact threshold:", width=150)
 
-    _thr_syncing = [False]  # re-entrancy guard to prevent infinite update loops
+    # re-entrancy guard to prevent infinite update loops
+    _thr_syncing = [False]
 
     def on_thr_slider_change(attr, old, new):
         """Slider moved → push the new value into the text box."""
@@ -478,7 +486,7 @@ def train_tab_layout(engine, trained_model_storage):
     # per state variable).
     diag_stats_div = Div(
         text="<a>Run a training session to see diagnostics.</a>",
-        styles={'font-size': '13px', 'color' : '#00000'}
+        styles={'font-size': '13px', 'color': '#00000'}
     )
 
     counter = [0]   # run counter — monotonically increasing, never reset
@@ -843,10 +851,10 @@ def train_tab_layout(engine, trained_model_storage):
 
     # temporarily disable these 2
     # file_input, upload_status,
-    
+
     top_row = row(
         column(file_select, train_s, library_select,
-               poly_s, thr_s,thr_input, row(btn_train, btn_delete), width=350),
+               poly_s, thr_s, thr_input, row(btn_train, btn_delete), width=350),
         column(p, view_div, sizing_mode="stretch_width"),
         sizing_mode="stretch_width"
     )
