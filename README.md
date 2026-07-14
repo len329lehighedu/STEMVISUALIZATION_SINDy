@@ -188,8 +188,8 @@ The result is an interpretable, parsimonious equation — not a neural network y
 After training on the Van der Pol oscillator with a Polynomial (degree 3) library:
 
 ```
-d(x)/dt =  1.000 v
-d(v)/dt = -1.000 x  +  1.000 v  -  1.000 x² v
+d(x)/dt =  1.003 v
+d(v)/dt = -0.993 x  +  1.488 v  -  1.488 x² v
 ```
 
 Compared to the true equations:
