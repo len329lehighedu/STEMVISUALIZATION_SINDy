@@ -296,6 +296,7 @@ def train_tab_layout(engine, trained_model_storage):
         options=[
             "Random Sampling",
             "Time-based",
+            "Random Block",
         ],
         width=150,
     )

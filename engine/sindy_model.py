@@ -62,19 +62,82 @@ class SINDyEngine:
         # Step 2: random shuffle indices
         n = len(t)
         n_train = int(n * train_frac)
+        # for random block split
+        n_blocks = 20
+        rng = np.random.default_rng(random_seed)
 
         if split_method == "random sampling":
-
-            rng = np.random.default_rng(random_seed)
+            # Random point-level split.
+            # Shuffle ALL sample indices, then take the first `n_train` as the
+            # training set and the rest as validation. This gives good coverage
+            # of the entire state space explored by the trajectory, but each
+            # validation point may sit only 1-2 time-steps away from a training
+            # point (high autocorrelation between neighbors), so the validation
+            # score can be slightly optimistic — it is not a fully independent
+            # check on its own (see Test tab for genuine out-of-sample validation).
             indices = rng.permutation(n)
 
             train_idx = np.sort(indices[:n_train])
             val_idx   = np.sort(indices[n_train:])
+            # np.sort() restores chronological order within each subset.
+            # Without this, concatenating shuffled indices would leave t[train_idx]
+            # jumping backward and forward in time — breaking any code downstream
+            # that assumes indices are time-ordered (e.g. plotting a line, or
+            # forward-simulating with solve_ivp which requires increasing t).
 
         elif split_method == "time-based":
-
+            # Classic chronological split: first `n_train` points -> train,
+            # remaining points -> validation. This mimics a "predict the future
+            # from the past" scenario and avoids the autocorrelation leak of
+            # random sampling, but at the cost of validation coverage: if the
+            # trajectory hasn't fully explored its state space by n_train, the
+            # validation set may sit in a region of state space the model never
+            # saw during training, which can make validation metrics look worse
+            # for reasons unrelated to model quality.
             train_idx = np.arange(n_train)
             val_idx   = np.arange(n_train, n)
+
+            
+        elif split_method == "random block":
+            # Random BLOCK split — a middle ground between "random sampling"
+            # and "time-based".
+            #
+            # Rationale: random sampling shuffles individual points, so a
+            # validation point can sit right next to a training point in time,
+            # and because the trajectory changes smoothly, neighboring points
+            # are nearly identical (high autocorrelation) — the model effectively
+            # "sees" a near-duplicate of each validation point during training,
+            # inflating the validation score.
+            #
+            # Fix: instead of shuffling individual points, chop the trajectory
+            # into contiguous blocks (chunks of `block_size` consecutive samples)
+            # and shuffle/split at the BLOCK level. As long as block_size is large
+            # enough (e.g. >10-20 samples), each validation block sits far enough
+            # from its neighbors in time that autocorrelation leak is greatly
+            # reduced, while still preserving random coverage across the full
+            # trajectory (unlike time-based, which only validates on the tail end).
+            block_size = max(5, n // n_blocks)      # each block's length in samples
+            n_blocks_total = n // block_size         # how many whole blocks fit in the data
+            block_ids = rng.permutation(n_blocks_total)   # shuffle block IDs, not point indices
+            n_train_blocks = int(n_blocks_total * train_frac)
+
+            train_blocks = sorted(block_ids[:n_train_blocks])
+            val_blocks   = sorted(block_ids[n_train_blocks:])
+
+            # Expand each block ID into its actual range of point indices, then
+            # flatten into a single index array per split.
+            train_idx = np.concatenate([np.arange(b*block_size, (b+1)*block_size) for b in train_blocks])
+            val_idx   = np.concatenate([np.arange(b*block_size, (b+1)*block_size) for b in val_blocks])
+
+            # Same reasoning as the "random sampling" branch above: block IDs were
+            # selected in random order, so concatenating them leaves the resulting
+            # index array chronologically scrambled BETWEEN blocks (though each
+            # individual block is already internally ordered). Sorting restores
+            # global time-order so downstream code (plotting, solve_ivp, etc.)
+            # can safely assume increasing time — the result has "gaps" where
+            # blocks belonging to the other split were skipped, which is expected
+            # and fine; only the ordering within the returned array matters.
+            train_idx, val_idx = np.sort(train_idx), np.sort(val_idx)
 
         else:
             raise ValueError(
