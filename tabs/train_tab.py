@@ -849,11 +849,11 @@ def train_tab_layout(engine, trained_model_storage):
     # SECTION 8 — LAYOUT ASSEMBLY
     # =========================================================================
 
-    # temporarily disable these 2
-    # file_input, upload_status,
+    # temporarily disable this
+    # upload_status,
 
     top_row = row(
-        column(file_select, train_s, library_select,
+        column(file_select, file_input, train_s, library_select,
                poly_s, thr_s, thr_input, row(btn_train, btn_delete), width=350),
         column(p, view_div, sizing_mode="stretch_width"),
         sizing_mode="stretch_width"
