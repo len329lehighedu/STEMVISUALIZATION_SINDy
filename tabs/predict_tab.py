@@ -11,16 +11,13 @@ def predict_tab_layout(engine, trained_model_storage):
     # 1. UI Components
     # -------------------------------------------------------------------------
     model_select = Select(title="SELECT MODEL (FROM HISTORY)", options=[], value="")
-    horizon_s    = Slider(start=10, end=500, value=100, step=10,
-                          title="Prediction Horizon (seconds)")
-    btn_predict  = Button(label="▶ PREDICT", button_type="primary", height=50)
 
-    # IC input — show the hint based on feature names of selected model 
+    # IC input — show the hint based on feature names of selected model
     ic_hint_div = Div(
-        text="<i style='color:#888;font-size:12px;'>Select a model to see variable names.</i>",
+        text="<i style='color:#247008;font-size:12px;'>Select a model to see variable names.</i>",
         styles={'padding': '2px 0'}
     )
-    
+
     # Sample initial condition
     ic_input = TextInput(
         title="Initial Conditions x₀",
@@ -28,6 +25,16 @@ def predict_tab_layout(engine, trained_model_storage):
         value="",
         width=300,
     )
+
+    horizon_s = Slider(start=10, end=500, value=100, step=10,
+                       title="Prediction Horizon (seconds)")
+
+    status_div = Div(text="", styles={'padding': '4px 0', 'font-size': '13px'})
+
+    # Buttons — same size/style pair as Train tab's TRAIN + DELETE, so the
+    # two "action tabs" (Train, Predict) feel like the same app.
+    btn_predict = Button(label="PREDICT", button_type="primary", height=50, width=100)
+    btn_clear   = Button(label="CLEAR",   button_type="danger",  height=50, width=100)
 
     # -------------------------------------------------------------------------
     # 2. Update IC hint when choosing a different model
@@ -51,9 +58,9 @@ def predict_tab_layout(engine, trained_model_storage):
         if names:
             # convert list to string
             ic_input.value = ", ".join([f"{v:.4f}" for v in ic_list])
-            
+
             ic_hint_div.text = (
-                f"<i style='color:#2980b9;font-size:12px;'>"
+                f"<i style='color:#247008;font-size:12px;'>"
                 f"Variables: <b>{', '.join(names)}</b> "
                 f"— enter {n_vars} values</i>"
             )
@@ -75,8 +82,6 @@ def predict_tab_layout(engine, trained_model_storage):
     renderers   = {}
     colors      = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728",
                    "#9467bd", "#8c564b"]
-
-    status_div = Div(text="", styles={'padding': '4px 0', 'font-size': '13px'})
 
     # -------------------------------------------------------------------------
     # 4. Predict callback
@@ -122,6 +127,24 @@ def predict_tab_layout(engine, trained_model_storage):
 
         x_future = engine.simulate_with_model(model_instance, x0, t_future)
 
+        # ── ROBUSTNESS FIX ──────────────────────────────────────────────
+        # engine.simulate_with_model() silently returns a zero-filled array
+        # on internal failure (it only prints to the server console, never
+        # raises). Previously, on_predict_click had no way to distinguish
+        # "the model genuinely predicts x=0 everywhere" from "the simulation
+        # crashed" — the status message always showed a green success
+        # message regardless. We now explicitly detect the zero-fallback
+        # signature and surface it as a visible error instead of silently
+        # plotting a flat line the user might mistake for a real result.
+        if x_future is not None and np.all(x_future == 0):
+            status_div.text = (
+                "<span style='color:red;'>⚠ Simulation failed — the model "
+                "could not be integrated from this initial condition. "
+                "Try a different x₀, or retrain with a lower degree / "
+                "higher sparsity threshold.</span>"
+            )
+            return
+
         # Clear plot
         p_pred.renderers    = []
         p_pred.legend.items = []
@@ -153,11 +176,32 @@ def predict_tab_layout(engine, trained_model_storage):
 
         ic_display = ", ".join([f"{name}={v:.2g}" for name, v in zip(var_names, x0)])
         status_div.text = (
-            f"<span style='color:#27ae60;'>✅ Predicted {horizon_s.value}s "
+            f"<span style='color:#247008;'>✅ Predicted {horizon_s.value}s "
             f"from x₀: {ic_display}</span>"
         )
 
     btn_predict.on_click(on_predict_click)
+
+    # -------------------------------------------------------------------------
+    # 4b. Clear callback — resets the plot and IC input back to defaults.
+    # Mirrors Train tab's DELETE button visually (same red "danger" action
+    # sitting next to the primary action), but here it clears the current
+    # prediction view rather than deleting a leaderboard entry.
+    # -------------------------------------------------------------------------
+    def on_clear_click():
+        p_pred.renderers    = []
+        p_pred.legend.items = []
+        renderers.clear()
+        source_pred.data = {}
+        p_pred.title.text = "Future Trajectory Prediction"
+        status_div.text = ""
+        # Re-fill IC with the selected model's stored initial condition
+        # (rather than blanking it) so the user doesn't have to re-select
+        # the model just to get the hint back.
+        if model_select.value:
+            on_model_select_change(None, None, model_select.value)
+
+    btn_clear.on_click(on_clear_click)
 
     # -------------------------------------------------------------------------
     # 5. Update model list (called on tab switch from main.py)
@@ -172,20 +216,22 @@ def predict_tab_layout(engine, trained_model_storage):
                 on_model_select_change(None, None, model_select.value)
 
     # -------------------------------------------------------------------------
-    # 6. Layout
+    # 6. Layout — sidebar (fixed width) + plot (stretch), matching the
+    # Train tab's top_row structure so the two tabs feel like one app.
     # -------------------------------------------------------------------------
+    sidebar = column(
+        model_select,
+        ic_hint_div,
+        ic_input,
+        horizon_s,
+        status_div,
+        row(btn_predict, btn_clear),
+        width=320,
+    )
+
     layout = column(
-        row(model_select, horizon_s),
-        row(
-            column(
-                ic_hint_div,
-                ic_input,
-                btn_predict,
-                width=350
-            ),
-            column(status_div)
-        ),
-        p_pred,
+        row(sidebar, column(p_pred, sizing_mode="stretch_width"),
+            sizing_mode="stretch_width"),
         sizing_mode="stretch_width"
     )
 
