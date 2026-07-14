@@ -9,3 +9,6 @@ __pycache__/
 venv/
 .venv/
 env/
+# history training logs
+logs/
+*.xlsx
