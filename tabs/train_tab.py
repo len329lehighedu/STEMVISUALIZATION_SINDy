@@ -216,7 +216,7 @@ def train_tab_layout(engine, trained_model_storage):
         ("custom_upload",       "Upload your own data")
     ]
 
-    file_select = Select(title="1) SELECT SYSTEM", options=system_options,
+    file_select = Select(title="SELECT SYSTEM", options=system_options,
                          value="cs_train_data.csv")
 
     # File upload widget — hidden until the user picks "Upload your own data".
@@ -273,7 +273,7 @@ def train_tab_layout(engine, trained_model_storage):
     # threshold, and the Train button.
     # =========================================================================
 
-    library_select = Select(title="2) LIBRARY",
+    library_select = Select(title="LIBRARY",
                             options=["Polynomial", "Fourier", "Combined"],
                             value="Polynomial")
 
@@ -281,20 +281,20 @@ def train_tab_layout(engine, trained_model_storage):
     # (This UX choice avoids the earlier bug where two independent sliders
     # could be set to sum to less/more than 100%.)
     train_s = Slider(start=10, end=90, value=60, step=5,
-                     title="Train/Validation Split")
+                     title=f"TRAIN/VALIDATION SPLIT")
     train_s.show_value = False
 
     def on_train_s_change(attr, old, new):
         """Keep the human-readable split label in sync with the slider."""
-        train_s.title = f"Split: Train {new}% | Validation {100 - new}%"
+        train_s.title = f"SPLIT: TRAIN {new}% | VALIDATION {100 - new}%"
     
 
     train_s.on_change('value', on_train_s_change)
 
     poly_s = Slider(start=1, end=5,     value=1,
-                    step=1,     title="Degree / Harmonics")
+                    step=1,     title="DEGREE / HARMONICS")
     thr_s = Slider(start=0.0, end=0.5, value=0.1,
-                   step=0.005, title="Sparsity Threshold")
+                   step=0.005, title="SPARSITY THRESHOLD")
     # ── Manual threshold input ──────────────────────────────────────────
     # Some systems turned out to be very sensitive to the exact threshold
     # value — the 0.005 slider step is too coarse for fine-tuning (e.g.
