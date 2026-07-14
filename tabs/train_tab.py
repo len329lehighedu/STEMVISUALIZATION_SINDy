@@ -363,25 +363,39 @@ def train_tab_layout(engine, trained_model_storage):
     """
     eqn_formatter = HTMLTemplateFormatter(template=eqn_template)
 
+    # Small HTML template for the merged Train/Val metric cells — packs
+    # R²/RMSE/MAE into 3 short lines instead of 3 separate wide columns.
+    metrics_template = """
+    <div style="white-space: normal; line-height: 1.4; padding: 4px 0;
+                font-family: 'Courier New', monospace; font-size: 11px;">
+        <%= value %>
+    </div>
+    """
+    metrics_formatter = HTMLTemplateFormatter(template=metrics_template)
+
+    def _fmt_metrics_html(label, color, r2, rmse, mae):
+        return (
+            f"<b style='color:{color};'>{label}</b><br>"
+            f"R²: {r2:.4f}<br>RMSE: {rmse:.6f}<br>MAE: {mae:.6f}"
+        )
+
     source_history = ColumnDataSource(data=dict(
-        run=[], lib=[], poly=[], thr=[],
-        train_r2=[], train_rmse=[], train_mae=[],
-        val_r2=[],   val_rmse=[],   val_mae=[],
+        run=[], system=[], lib=[], poly=[], thr=[],
+        train_metrics=[], val_metrics=[],
         rmse_diff=[], equations=[]
     ))
 
     columns = [
         TableColumn(field="run",        title="Run #",           width=100),
+        TableColumn(field="system",     title="Data File",       width=200),
         TableColumn(field="lib",        title="Library",         width=200),
-        TableColumn(field="poly",        title="Degree",          width=100),
-        TableColumn(field="thr",        title="Noise",          width=100),
-        TableColumn(field="train_r2",   title="Train R² (dX)",   width=250),
-        TableColumn(field="train_rmse", title="Train RMSE (dX)", width=250),
-        TableColumn(field="train_mae",  title="Train MAE (dX)",  width=250),
-        TableColumn(field="val_r2",     title="Val R² (dX)",     width=250),
-        TableColumn(field="val_rmse",   title="Val RMSE (dX)",   width=250),
-        TableColumn(field="val_mae",    title="Val MAE (dX)",    width=250),
-        TableColumn(field="rmse_diff",  title="RMSE Diff",       width=250),
+        TableColumn(field="poly",        title="Degree",          width=200),
+        TableColumn(field="thr",        title="Noise",          width=200),
+        TableColumn(field="train_metrics", title="Train Metrics",
+                    width=200, formatter=metrics_formatter),
+        TableColumn(field="val_metrics",   title="Val Metrics",
+                    width=200, formatter=metrics_formatter),
+        TableColumn(field="rmse_diff",  title="RMSE Diff",       width=200),
         TableColumn(field="equations",  title="Identified Equations",
                     width=1000, formatter=eqn_formatter),
     ]
@@ -671,10 +685,15 @@ def train_tab_layout(engine, trained_model_storage):
             decoded = base64.b64decode(file_input.value)
             f = io.BytesIO(decoded)
             df = pd.read_csv(f).astype(np.float64)
+            # FileInput.filename is only populated in newer Bokeh versions —
+            # fall back to a generic label so the leaderboard never shows blank.
+            data_file_label = getattr(
+                file_input, 'filename', None) or "Custom Upload"
         else:
             # Load one of the bundled pre-set system files.
             path = os.path.join('data', file_select.value)
             df = pd.read_csv(path).astype(np.float64)
+            data_file_label = file_select.value
 
         counter[0] += 1  # unique, ever-increasing run ID
 
@@ -730,15 +749,12 @@ def train_tab_layout(engine, trained_model_storage):
         # ── 7. Append a new row to the leaderboard ──────────────────────────
         new_entry = {
             'run':        [counter[0]],
+            'system':     [data_file_label],
             'lib':        [library_select.value],
             'poly':       [poly_s.value],
             'thr':        [thr_s.value],
-            'train_r2':   [f"{t_r2:.4f}"],
-            'train_rmse': [f"{t_rmse:.6f}"],
-            'train_mae':  [f"{t_mae:.6f}"],
-            'val_r2':     [f"{v_r2:.4f}"],
-            'val_rmse':   [f"{v_rmse:.6f}"],
-            'val_mae':    [f"{v_mae:.6f}"],
+            'train_metrics': [_fmt_metrics_html("TRAIN", "#1f77b4", t_r2, t_rmse, t_mae)],
+            'val_metrics':   [_fmt_metrics_html("VAL", "#ff7f0e", v_r2, v_rmse, v_mae)],
             'rmse_diff':  [f"{rmse_diff:.6f}"],
             'equations':  [formatted_eqs_html],
         }
