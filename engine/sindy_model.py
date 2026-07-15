@@ -19,7 +19,7 @@ class SINDyEngine:
         elif lib_type == "Fourier":
             return ps.FourierLibrary(n_frequencies=int(poly_degree))
         elif lib_type == "Combined":
-            return (ps.PolynomialLibrary(degree=2)
+            return (ps.PolynomialLibrary(degree=int(poly_degree))
                     + ps.FourierLibrary(n_frequencies=int(poly_degree)))
         else:
             raise ValueError(
