@@ -36,7 +36,7 @@ class SINDyEngine:
         return dX shape (n_samples, n_features).
         """
         diff = ps.SmoothedFiniteDifference()
-        dX   = diff._differentiate(X, t)
+        dX   = diff(X,t=t)
         return dX
 
     # ------------------------------------------------------------------
