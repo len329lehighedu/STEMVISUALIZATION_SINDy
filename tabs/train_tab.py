@@ -514,6 +514,12 @@ def train_tab_layout(engine, trained_model_storage):
                 f"SNR={s['snr_db']} dB | "
                 f"autocorr={s['autocorr']}<br>"
             )
+        stats_html += (
+            "<span style='color:#7f8c8d; font-size:11px;'>"
+            "<i>Computed on the full dataset (train + validation combined) — "
+            "not directly comparable to the Train/Val R² in the leaderboard below.</i>"
+            "</span>"
+        )
         diag_stats_div.text = stats_html
 
     # =========================================================================
