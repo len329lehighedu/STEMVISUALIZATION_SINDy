@@ -300,7 +300,7 @@ class SINDyEngine:
             # --- Stats shown as text (no classification) ---
             signal_power = np.var(dX_true[:, i])
             noise_power  = np.var(r)
-            r2_dx   = float(1 - noise_power / signal_power) if signal_power > 0 else 0.0
+            r2_dx   = float(r2_score(dX_true[:, i], dX_pred[:, i])) if signal_power > 0 else 0.0
             snr_db  = 10 * np.log10(signal_power / noise_power) if noise_power > 0 else 99.0
             r_norm  = r - r.mean()
             autocorr = float(np.corrcoef(r_norm[:-1], r_norm[1:])[0, 1])
