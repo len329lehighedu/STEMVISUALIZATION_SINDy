@@ -28,32 +28,11 @@
 
     <hr class="minimal-hr">
 
+
     <!-- STEP 2 -->
     <article class="instruction-row">
         <div class="text-content">
-            <h2 class="step-title">02. Parameters Suggestion</h2>
-            <p>When data is uploaded, the module will read the data and come up with recommendations:</p>
-            <ul class="benefit-list">
-                <li><b>Library Type:</b> Polynomial vs Fourier based on system behavior.</li>
-                <li><b>Degree:</b> Estimated from linearity analysis of the derivatives.</li>
-                <li><b>Threshold:</b> Estimated from the noise level in your data.</li>
-            </ul>
-            <p class="tip-text">💡 These are starting points — you can always tune them manually.</p>
-        </div>
-        <div class="visual-content">
-            <div class="placeholder-box">
-                <img src="../static/images/aisuggestion.png" alt="Explore Data" class="ins-img">
-                <p class="caption">AI Suggester analyzing time series, phase portrait, and FFT.</p>
-            </div>
-        </div>
-    </article>
-
-    <hr class="minimal-hr">
-
-    <!-- STEP 3 -->
-    <article class="instruction-row">
-        <div class="text-content">
-            <h2 class="step-title">03. Train / Validation Split</h2>
+            <h2 class="step-title">02. Train / Validation Split</h2>
             <p>Use the <b>Split Slider</b> to define how much data the algorithm will use during the discovery phase.</p>
             <ul class="benefit-list">
                 <li><b>Training Set:</b> Used to find the sparse coefficients \( \Xi \). Derivatives \( \dot{X} \) are computed on the full dataset first, then randomly split.</li>
@@ -70,10 +49,10 @@
 
     <hr class="minimal-hr">
 
-    <!-- STEP 4 -->
+    <!-- STEP 3 -->
     <article class="instruction-row">
         <div class="text-content">
-            <h2 class="step-title">04. Model Configuration & Training</h2>
+            <h2 class="step-title">03. Model Configuration & Training</h2>
             <p>Define the <b>Mathematical Search Space</b>. SINDy will find the sparsest combination of these functions to describe your data.</p>
             <div class="config-details">
                 <div class="detail-item">
@@ -101,10 +80,10 @@
 
     <hr class="minimal-hr">
 
-    <!-- STEP 5 -->
+    <!-- STEP 4 -->
     <article class="instruction-row">
         <div class="text-content">
-            <h2 class="step-title">05. Testing</h2>
+            <h2 class="step-title">04. Testing</h2>
             <p>A good SINDy model should generalize beyond the training trajectory. In the <b>Test Tab</b>, verify this by simulating the discovered equations from entirely new initial conditions.</p>
             <ul class="benefit-list">
                 <li><b>Load Test CSV:</b> A separate dataset generated from the same system but with different \( x_0 \). Do not use any portion of this for training to avoid overfitting.</li>
@@ -123,10 +102,10 @@
 
     <hr class="minimal-hr">
 
-    <!-- STEP 6 -->
+    <!-- STEP 5 -->
     <article class="instruction-row">
         <div class="text-content">
-            <h2 class="step-title">06. Predict Future Trajectories</h2>
+            <h2 class="step-title">05. Predict Future Trajectories</h2>
             <p>Once you have a validated model, use the <b>Predict Tab</b> to simulate the system into the future from any initial condition of your choice.</p>
             <div class="config-details">
                 <div class="detail-item">
