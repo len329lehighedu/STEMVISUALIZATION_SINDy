@@ -17,10 +17,21 @@
     </header>
 
     <div class="navbar">
-        <a href="#" onclick="loadPage('storyline')">PROBLEM STATEMENT</a>
-        <a href="#" onclick="loadPage('about')">ABOUT SINDy</a>
-        <a href="#" onclick="loadPage('instructions')">INSTRUCTIONS</a>
-        <a href="#" onclick="loadPage('questions')">GENERAL QUESTIONS</a>
+        <a href="#" class="nav-link" data-page="storyline" onclick="loadPage('storyline', this); return false;">
+            PROBLEM STATEMENT
+        </a>
+
+        <a href="#" class="nav-link" data-page="about" onclick="loadPage('about', this); return false;">
+            ABOUT SINDy
+        </a>
+
+        <a href="#" class="nav-link" data-page="instructions" onclick="loadPage('instructions', this); return false;">
+            INSTRUCTIONS
+        </a>
+
+        <a href="#" class="nav-link" data-page="questions" onclick="loadPage('questions', this); return false;">
+            GENERAL QUESTIONS
+        </a>
     </div>
 
     <div class="container main-content-area">
@@ -111,10 +122,16 @@
 
     <script>
 
-        async function loadPage(page) {
+        async function loadPage(page, element = null) {
+
+            document.querySelectorAll(".navbar .nav-link")
+                .forEach(link => link.classList.remove("active"));
+
+            if (element) {
+                element.classList.add("active");
+            }
 
             const response = await fetch("/fragment/" + page);
-
             const html = await response.text();
 
             document.getElementById("page-content").innerHTML = html;
@@ -127,12 +144,18 @@
             if (window.MathJax) {
                 MathJax.typesetPromise();
             }
-
         }
 
-        window.onload = function () {
-            loadPage("storyline");
-        }
+        // Khi mở trang
+        document.addEventListener("DOMContentLoaded", () => {
+
+            const firstTab = document.querySelector(
+                '.nav-link[data-page="storyline"]'
+            );
+
+            loadPage("storyline", firstTab);
+
+        });
 
     </script>
 </body>
