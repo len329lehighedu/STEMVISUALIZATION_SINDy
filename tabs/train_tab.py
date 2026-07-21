@@ -385,34 +385,67 @@ def train_tab_layout(engine, trained_model_storage):
         text="",
         styles={'color': '#7f8c8d', 'font-size': '13px', 'padding': '4px 0'}
     )
+    # Static role-legend — separate from Bokeh's interactive per-state legend.
+    # Needed because merging train/val/fit under one legend_label per state
+    # (for mute-by-variable) removes the old separate "Train points"/"Val
+    # points" entries, so marker-shape meaning must be spelled out explicitly
+    # somewhere the student can't miss — this is pedagogically load-bearing
+    # since the whole point of this plot is showing HOW the split partitions
+    # the data differently per split strategy.
+    split_key_div = Div(
+        text=(
+            "<div style='font-size:12px; color:#5c6b78; padding:4px 0;'>"
+            "<b style='color:#1f77b4;'>Train points</b> &nbsp;&nbsp;"
+            "<b style='color:#ff7f0e;'>Validation points</b> &nbsp;&nbsp;"
+            "<span style='color:#2ca02c;'>SINDy fit</span>"
+            "</div>"
+        )
+    )
 
     def render_plot(run_id):
         """
         Redraw the main result plot (Section 5) from the stored plot_data
-        of a given run. This is what allows switching between runs in the
-        leaderboard without re-running the (potentially expensive) SINDy fit.
+        of a given run. Overlays ALL state variables (previously only the
+        first one, X[:, 0]) — train points, validation points, and the
+        SINDy-simulated line for a given variable all share one legend_label,
+        so Bokeh groups them into a single legend entry: clicking it mutes
+        all three renderers for that variable together.
         """
         data = trained_model_storage[run_id]['plot_data']
         t, X = data['t'], data['X']
         train_idx = data['train_idx']
         val_idx = data['val_idx']
         x_sim_full = data['x_sim']
+        names = trained_model_storage[run_id].get('feature_names') or \
+            [f"x{i+1}" for i in range(X.shape[1])]
 
         p.renderers = []
         if p.legend and len(p.legend) > 0:
             p.legend.items = []
 
-        # Train points in BLUE
-        p.scatter(t[train_idx], X[train_idx, 0],
-                  color="#1f77b4", alpha=0.4, size=4, legend_label="Train points")
-        # Validation points in ORANGE
-        p.scatter(t[val_idx], X[val_idx, 0],
-                  color="#ff7f0e", alpha=0.4, size=4, legend_label="Val points")
-        # SINDy-simulated trajectory in GREEN
-        if x_sim_full is not None:
-            p.line(t, x_sim_full[:, 0],
-                   color="#2ecc71", line_width=2.5, legend_label="SINDy found")
+        n_vars = X.shape[1]
+        for i in range(n_vars):
+            label = names[i] if i < len(names) else f"x{i+1}"
 
+            # Data points: neutral gray, low-key — role is "ground truth", not tied
+            # to a specific state's color. Marker shape still separates train/val.
+            p.scatter(t[train_idx], X[train_idx, i],
+              color="#1f77b4", alpha=0.35, size=4,
+              legend_label=label,
+              muted_color="#9aa4ad", muted_alpha=0.04)
+            p.scatter(t[val_idx], X[val_idx, i],
+              color="#ff7f0e", alpha=0.35, size=5,
+              legend_label=label,
+              muted_color="#9aa4ad", muted_alpha=0.04)
+            # Fit line: this is the only element that carries the state's color,
+            # drawn on top with full saturation — nothing else competes with it
+            # for that hue, so it reads clearly through the data cloud regardless
+            # of fit quality.
+            if x_sim_full is not None:
+                p.line(t, x_sim_full[:, i],
+                    color="#2ca02c", line_width=2.8,
+                    legend_label=label,
+                    muted_color="#2ca02c", muted_alpha=0.06)
         p.legend.click_policy = "hide"
         p.legend.location = "top_right"
         p.title.text = f"Model Result — Run #{run_id}"
@@ -469,6 +502,7 @@ def train_tab_layout(engine, trained_model_storage):
                 diag['t'], diag['residuals'][name],
                 color=color, line_width=1.5, alpha=0.8,
                 legend_label=name,
+                muted_color=color, muted_alpha=0.12,
             )
 
             # Plot 2 — FFT amplitude spectrum of the residual
@@ -476,6 +510,7 @@ def train_tab_layout(engine, trained_model_storage):
                 freqs, diag['fft_amps'][name],
                 color=color, line_width=1.5, alpha=0.8,
                 legend_label=name,
+                muted_color=color, muted_alpha=0.12,
             )
 
             # Plot 3 — dX_true vs dX_pred scatter
@@ -483,6 +518,7 @@ def train_tab_layout(engine, trained_model_storage):
                 diag['dX_pred'][name], diag['dX_true'][name],
                 color=color, alpha=0.3, size=4,
                 legend_label=name,
+                muted_color=color, muted_alpha=0.06,
             )
 
         # ── Auto-scale FFT x-axis ──────────────────────────────────────────
@@ -520,7 +556,7 @@ def train_tab_layout(engine, trained_model_storage):
         )
 
         for fig in [p_resid, p_fft, p_scatter]:
-            fig.legend.click_policy = "hide"
+            fig.legend.click_policy = "mute"
             fig.legend.location = "top_right"
 
         # Build the stats summary — one line per state variable.
@@ -754,7 +790,7 @@ def train_tab_layout(engine, trained_model_storage):
     top_row = row(
         column(file_select, file_input, train_s, split_select, library_select,
                poly_s, thr_s, thr_input, row(btn_train, btn_delete), width=320),
-        column(p, view_div, sizing_mode="stretch_width"),
+        column(p,split_key_div ,view_div, sizing_mode="stretch_width"),
         sizing_mode="stretch_width"
     )
 

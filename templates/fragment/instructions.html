@@ -58,7 +58,7 @@
             </div>
             <div class="doc-row-media">
                 <div class="doc-frame">
-                    <img src="{{ url_for('static', filename='images/datafile.png') }}"
+                    <img src="{{ url_for('static', filename='images/data.png') }}"
                         alt="Example of a correctly formatted state-space CSV" class="doc-frame-img">
                 </div>
                 <p class="doc-img-caption">A correctly formatted state-space CSV — time in column 1, states after it.
@@ -74,7 +74,7 @@
             <h3 class="doc-title">Choosing How SINDy Learns</h3>
         </div>
 
-        <h4 class="doc-subtitle">Train / validation split strategy</h4>
+        <h4 class="doc-subtitle">Train/Validation set up & Split Strategy</h4>
         <p class="doc-intro-p">Derivatives \( \dot{X} \) are always computed once on the <i>full</i> trajectory first —
             the split only decides how the resulting \( (X, \dot{X}) \) pairs are divided afterward. Three strategies
             are available, and they test different things:</p>
@@ -91,7 +91,7 @@
                 </div>
 
                 <div class="doc-frame">
-                    <img src="{{ url_for('static', filename='images/split_randomblock.png') }}"
+                    <img src="{{ url_for('static', filename='images/random_sampling.png') }}"
                         alt="Random Sampling split example" class="doc-frame-img">
                 </div>
 
@@ -110,7 +110,7 @@
                 </div>
 
                 <div class="doc-frame">
-                    <img src="{{ url_for('static', filename='images/split_timebased.png') }}"
+                    <img src="{{ url_for('static', filename='images/time_based.png') }}"
                         alt="Time-based split example" class="doc-frame-img">
                 </div>
 
@@ -129,7 +129,7 @@
                 </div>
 
                 <div class="doc-frame">
-                    <img src="{{ url_for('static', filename='images/split_timebased.png') }}"
+                    <img src="{{ url_for('static', filename='images/random_block.png') }}"
                         alt="Random Block split example" class="doc-frame-img">
                 </div>
 
@@ -154,11 +154,10 @@
             </div>
             <div class="doc-row-media">
                 <div class="doc-frame">
-                    <img src="{{ url_for('static', filename='images/trainvalsplit.png') }}"
+                    <img src="{{ url_for('static', filename='images/hyperparameter.png') }}"
                         alt="Hyperparameter controls" class="doc-frame-img">
                 </div>
-                <p class="doc-img-caption">Split percentage and strategy are set independently from
-                    library/degree/threshold.</p>
+                <p class="doc-img-caption">SINDy's hyperparameters.</p>
             </div>
         </div>
 
@@ -227,14 +226,15 @@
         </div>
 
         <!-- 3 type of residual stats: format text above, image below, separate into 3 columns, use all the width we had-->
-         <!-- RESIDUAL VS. TIME-->
+        <!-- RESIDUAL VS. TIME-->
         <div class="doc-grid">
             <div class="doc-card">
                 <div class="doc-card-text">
                     <p class="doc-item-name">Residual vs. time</p>
                     <p>
-                    A well-fit model's residuals should scatter randomly around zero with no visible trend. A repeating
-                    wave or drift in the residual means the library is missing a term that captures that behavior
+                        A well-fit model's residuals should scatter randomly around zero with no visible trend. A
+                        repeating
+                        wave or drift in the residual means the library is missing a term that captures that behavior
                     </p>
                 </div>
 
@@ -253,14 +253,14 @@
                 <div class="doc-card-text">
                     <p class="doc-item-name">Residual FFT (frequency content)</p>
                     <p>
-                        <p>Same residual, viewed as a frequency spectrum. A flat spectrum with no dominant peak confirms the
-                    error really is noise. A sharp peak means there's periodic structure left over.</p>
+                    <p>Same residual, viewed as a frequency spectrum. A flat spectrum with no dominant peak confirms the
+                        error really is noise. A sharp peak means there's periodic structure left over.</p>
                     </p>
                 </div>
 
                 <div class="doc-frame">
-                    <img src="{{ url_for('static', filename='images/residual_fft.png') }}"
-                        alt="Residual FFT example" class="doc-frame-img">
+                    <img src="{{ url_for('static', filename='images/residual_fft.png') }}" alt="Residual FFT example"
+                        class="doc-frame-img">
                 </div>
 
                 <p class="doc-img-caption">
@@ -273,9 +273,11 @@
                 <div class="doc-card-text">
                     <p class="doc-item-name">True vs. predicted derivative</p>
                     <p>
-                        Each point plots \( \dot{x}_{\text{predicted}} \) against \( \dot{x}_{\text{true}} \) for one sample.
-                    A perfect model places every point on the \( y = x \) diagonal. Curvature or fanning away from that
-                    line signals bias or error.
+                        Each point plots \( \dot{x}_{\text{predicted}} \) against \( \dot{x}_{\text{true}} \) for one
+                        sample.
+                        A perfect model places every point on the \( y = x \) diagonal. Curvature or fanning away from
+                        that
+                        line signals bias or error.
                     </p>
                 </div>
 
@@ -499,7 +501,7 @@
        ========================================================================== */
     .doc-row {
         display: flex;
-        align-items: flex-start;
+        align-items: stretch;
         gap: 48px;
         margin-bottom: 8px;
     }
@@ -514,6 +516,8 @@
 
     .doc-row-media {
         flex: 0.85;
+        display: flex;
+        flex-direction: column;
     }
 
     .doc-item-name {
@@ -543,6 +547,21 @@
         margin: 10px 0 0 0;
         text-align: center;
         font-style: italic;
+    }
+
+    .doc-row-media .doc-frame {
+        flex: 1;
+        position: relative;
+        min-height: 0;
+        /* Firefox flexbox fix so it can actually shrink/grow */
+    }
+
+    .doc-row-media .doc-frame-img {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
     }
 
     /* ===== 3-column layout ===== */
