@@ -10,7 +10,7 @@ BOKEH_URL = "http://localhost:5006/main"
 def index():
     script = server_document(BOKEH_URL)
     return render_template(
-        "base.html",
+        "index.html",
         script=script
     )
 

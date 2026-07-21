@@ -4,6 +4,13 @@
   --bg: #ffffff;
   
 }
+html, body {
+  width: 100%;
+  overflow-x: hidden;
+}
+*, *::before, *::after {
+  box-sizing: border-box;
+}
 body {
   margin: 0;
   font-family: "Inter", sans-serif;
@@ -12,9 +19,9 @@ body {
 }
 header {
   background: white;
-  padding: 20px;
+  /* padding: 20px; */
+  height: 80px;
   text-align: center;
-  border-bottom: 1px solid #ddd;
 }
 .navbar {
   background: #f4f4f4;
@@ -49,6 +56,6 @@ header {
 .container {
   width: 100%;
   margin: 0 auto;
-  background: #B2E2F7;
+  background: #b2e3f4; /* Same color as the color on STEM VISUALIZATION website */
   padding: 40px;
 }

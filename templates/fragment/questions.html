@@ -1,36 +1,56 @@
 <div class="faq-container">
-    <h2 class="section-title">General Questions & User Guide</h2>
-    <p class="subtitle">Find answers to common questions about the SINDy Identification Module and how to interpret the results.</p>
+    <h2 class="section-title">General Questions</h2>
+    <p class="subtitle">Understand your model deeper</p>
 
+    
     <details class="faq-item">
-        <summary>How do I start the training process?</summary>
+        <summary>How to compare the models?</summary>
         <div class="answer">
-            <p>Navigate to the <b>Interactive Module</b> tab. In the "Train" sub-tab, select your desired dataset from the dropdown menu, adjust the <i>Sparsity Threshold</i>, and click the <b>Run Train</b> button. The system will process the data and update the Leaderboard below.</p>
+            <p>Every time you run a training session, the results are saved in the <b>History Leaderboard</b>. You can
+                compare models based on the metrics (\( R^2 \), RMSE, MAE), residual statistics, and the number of active terms. To test a
+                specific model, go to the <b>Test</b> or <b>Predict</b> tabs and select the Model ID from the dropdown.
+            </p>
         </div>
     </details>
 
     <details class="faq-item">
-        <summary>What does the "Sparsity Threshold" (λ) represent?</summary>
+        <summary>What's the difference between the metrics shown in the Training History table and the metrics shown in the Test tab?</summary>
         <div class="answer">
-            <p>The Sparsity Threshold is the core parameter of the SINDy algorithm. It determines the "aggressiveness" of the feature selection:</p>
-            <ul>
-                <li><b>Low Threshold:</b> The model keeps more terms, potentially leading to higher accuracy but a more complex (and less physical) equation.</li>
-                <li><b>High Threshold:</b> The model forces more coefficients to zero, favoring simpler, more interpretable physical laws.</li>
-            </ul>
+            <p>Training/Validation metrics (\( R^2 \), RMSE, MAE) are computed on the derivative space (\( dX/dt \)) — this is what SINDy's STLSQ optimizer directly fits. 
+                Test tab metrics are computed on the state space (\( x(t) \)), after forward-simulating the discovered equations with <code>solve_ivp</code>. 
+                These two sets of numbers use different units and are not directly comparable. A model can have excellent Training RMSE(\( dX \)) and still show poor 
+                Test RMSE(\( x \)) if the small derivative-space errors compound during simulation. Always check both.</p>
         </div>
     </details>
 
-    <details class="faq-item">
-        <summary>How can I compare different models?</summary>
-        <div class="answer">
-            <p>Every time you run a training session, the results are saved in the <b>History Leaderboard</b>. You can compare models based on their <i>MSE (Mean Squared Error)</i> and the number of active terms. To test a specific model, go to the <b>Test</b> or <b>Predict</b> tabs and select the Model ID from the dropdown.</p>
-        </div>
-    </details>
 
     <details class="faq-item">
         <summary>Why is the prediction diverging after some time?</summary>
         <div class="answer">
-            <p>SINDy models are sensitive to the <i>Prediction Horizon</i>. If the identified dynamics are slightly unstable or if the data was noisy, errors can accumulate during integration. Try increasing the Sparsity Threshold to find a more robust physical representation.</p>
+            <p>SINDy models are sensitive to the <i>Prediction Horizon</i>. If the identified dynamics are slightly
+                unstable or if the data was noisy, errors can accumulate during integration. Try increasing the Sparsity
+                Threshold to find a more robust physical representation.</p>
+        </div>
+    </details>
+
+    <details class="faq-item">
+        <summary>Why is R² high but the simulated trajectory still diverges from the true data?</summary>
+        <div class="answer">
+            <p>\( R^2 \) shown in the Training tab is computed on the derivative space (\( dX/dt \)), which is what
+                SINDy's loss function actually optimizes — not on the simulated trajectory \( x(t) \). A model can fit
+                the derivative field almost perfectly and still diverge when numerically integrated, because small
+                coefficient errors compound over time during simulation. This is exactly why the Test tab exists: it
+                forward-integrates your equations with <code>solve_ivp</code> and reports RMSE/\( R^2 \) on \( x(t) \)
+                directly, which is the metric that actually matters for prediction.</p>
+        </div>
+    </details>
+
+    <details class="faq-item">
+        <summary>What does "Sparsity parameter is too big and eliminated all coefficients" mean?</summary>
+        <div class="answer">
+            <p>Your Sparsity Threshold is set higher than the magnitude of every coefficient in the true (or best-fit) equations, 
+                so STLSQ pruned everything to zero — the model effectively found \( dX/dt = 0 \) for your system. 
+                Lower the threshold (try the "type exact threshold" box for fine control) and re-train.</p>
         </div>
     </details>
 
@@ -41,16 +61,19 @@
         max-width: 800px;
         margin: 0 auto;
     }
+
     .section-title {
         color: var(--primary);
         font-size: 24px;
         margin-bottom: 10px;
     }
+
     .subtitle {
         color: #666;
         margin-bottom: 30px;
         font-size: 15px;
     }
+
     .faq-item {
         background: #fcfcfc;
         border: 1px solid #edf2f7;
@@ -58,11 +81,13 @@
         margin-bottom: 15px;
         transition: all 0.3s ease;
     }
+
     .faq-item[open] {
         background: #ffffff;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
         border-color: var(--accent);
     }
+
     summary {
         padding: 15px 20px;
         font-weight: 600;
@@ -74,20 +99,24 @@
         outline: none;
         color: var(--primary);
     }
+
     summary::after {
         content: '+';
         font-size: 18px;
         color: var(--accent);
     }
+
     .faq-item[open] summary::after {
         content: '−';
     }
+
     .answer {
         padding: 0 20px 20px 20px;
         color: #4a5568;
         line-height: 1.6;
         font-size: 14px;
     }
+
     .answer b {
         color: var(--accent);
     }

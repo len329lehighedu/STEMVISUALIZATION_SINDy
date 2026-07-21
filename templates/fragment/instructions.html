@@ -1,223 +1,690 @@
+<!--
+    ============================================================================
+    instructions.html
+    ============================================================================
+    Host page for the Instructions section. Contains THREE sub-tabs:
+    Train, Test, Predict — switched client-side with plain JS (no server
+    round-trip, no new Flask route).
+
+    LAYOUT: each explained concept is a row — text on the left, a matching
+    screenshot on the right (same pattern as the hero/proof sections in
+    storyline.html). Rows stack to full width on narrow screens.
+
+    VISUAL SYSTEM: re-aligned to storyline.html's tokens (var(--primary),
+    var(--accent), light card borders, sd-browser-frame-style image frames)
+    instead of the previous standalone palette, so all fragments look like
+    one product.
+
+    STATUS: Train sub-tab is fully written. Test / Predict are placeholders.
+    Image placeholders added for: data file example, the 3 split strategies,
+    the library/degree/threshold control, and the 3 residual diagnostics.
+    Drop your screenshots into static/images/ using the filenames referenced
+    in each <img src> below (they're just placeholders until then).
+    ============================================================================
+-->
 <div class="minimal-container">
-    <!-- <header class="page-header"> -->
-    <h2 class="minimal-title">Building Your SINDy Model</h2>
-    <p class="main-subtitle">Follow these steps to discover the underlying physics of your data.</p>
-    <!-- </header> -->
 
-    <!-- STEP 1 -->
-    <article class="instruction-row">
-        <div class="text-content">
-            <h2 class="step-title">01. Data Preparation</h2>
-            <p>Upload your system measurements in <b>.csv</b> format. The data must be organized as a time-series state-space matrix.</p>
-            <div class="data-spec">
-                <p><b>Required Structure:</b></p>
-                <ul>
-                    <li><b>First Column:</b> Strictly increasing time values \( (t) \).</li>
-                    <li><b>Subsequent Columns:</b> State variables \( (x_1, x_2, \dots, x_n) \).</li>
-                </ul>
+    <header class="page-header">
+        <h2 class="minimal-title">Building Your SINDy Model</h2>
+        <p class="main-subtitle">A closer look at each tab of the module — what every control does and why.</p>
+    </header>
+
+    <!-- ======================= SUB-TAB NAVIGATION ======================= -->
+    <nav class="subtab-nav">
+        <button type="button" class="subtab-btn active" data-target="train">Train</button>
+        <button type="button" class="subtab-btn" data-target="test">Test</button>
+        <button type="button" class="subtab-btn" data-target="predict">Predict</button>
+    </nav>
+
+    <!-- =====================================================================
+         TRAIN SUB-TAB
+         Mirrors tabs/train_tab.py top-to-bottom: data source -> AI suggester
+         -> split strategy -> model config -> leaderboard -> residual
+         diagnostics.
+    ====================================================================== -->
+    <section class="subtab-panel" data-panel="train">
+
+        <!-- ---- Phase 1: Data source ---- -->
+        <div class="doc-row">
+            <div class="doc-row-text">
+                <span class="eyebrow">Data Source</span>
+                <h3 class="doc-title">Bringing In Your Data</h3>
+                <p>Start from the Select System dropdown. Pick one of the pre-set systems to test SINDy's ability or
+                    upload your own data file. The file must have time in the first column and one state variable per
+                    subsequent column — \( t, x_1, x_2, \dots, x_n \).</p>
+                <p>When the file is uploaded, the module also runs the System Suggestion in the background: it analyzes
+                    the linearity, periodicity, and noise level of your data and pre-fills the hyperparameter controls
+                    below with a reasonable starting point. These are only suggestions, as they can be wrong.</p>
             </div>
-            <p class="alert-text">⚠️ Ensure no missing values (NaN) and constant sampling intervals if possible.</p>
-        </div>
-        <div class="visual-content">
-            <div class="placeholder-box">
-                <img src="{{ url_for('static', filename='images/datafile.png') }}" alt="CSV Format Example" class="ins-img">
-                <p class="caption">Example of a properly formatted state-space CSV.</p>
-            </div>
-        </div>
-    </article>
-
-    <hr class="minimal-hr">
-
-
-    <!-- STEP 2 -->
-    <article class="instruction-row">
-        <div class="text-content">
-            <h2 class="step-title">02. Train / Validation Split</h2>
-            <p>Use the <b>Split Slider</b> to define how much data the algorithm will use during the discovery phase.</p>
-            <ul class="benefit-list">
-                <li><b>Training Set:</b> Used to find the sparse coefficients \( \Xi \). Derivatives \( \dot{X} \) are computed on the full dataset first, then randomly split.</li>
-                <li><b>Validation Set:</b> The remaining points, used to check the model on unseen data.</li>
-            </ul>
-            <p class="alert-text">⚠️ SINDy loss is based on residuals of \( \dot{X} \), not \( x(t) \) directly. Train/Validation metrics reflect derivative-space accuracy.</p>
-        </div>
-        <div class="visual-content">
-            <div class="placeholder-box">
-                <img src="{{ url_for('static', filename='images/trainvalsplit.png') }}" alt="Train Validation Split" class="ins-img">
-            </div>
-        </div>
-    </article>
-
-    <hr class="minimal-hr">
-
-    <!-- STEP 3 -->
-    <article class="instruction-row">
-        <div class="text-content">
-            <h2 class="step-title">03. Model Configuration & Training</h2>
-            <p>Define the <b>Mathematical Search Space</b>. SINDy will find the sparsest combination of these functions to describe your data.</p>
-            <div class="config-details">
-                <div class="detail-item">
-                    <b>Library Type:</b>
-                    <p>Choose <i>Polynomial</i> for most physical systems. Use <i>Fourier</i> only if you know the governing equations involve \( \sin/\cos \) terms.</p>
+            <div class="doc-row-media">
+                <div class="doc-frame">
+                    <img src="{{ url_for('static', filename='images/datafile.png') }}"
+                        alt="Example of a correctly formatted state-space CSV" class="doc-frame-img">
                 </div>
-                <div class="detail-item">
-                    <b>Polynomial Degree:</b>
-                    <p>Higher degrees (e.g., \( x^3 \)) allow more complex interactions but increase risk of noise fitting. Use the AI Suggester as a starting point.</p>
-                </div>
-                <div class="detail-item">
-                    <b>Threshold \( (\lambda) \):</b>
-                    <p>The sparsity controller. Higher \( \lambda \) prunes small coefficients → simpler equations. Too high and important terms get removed.</p>
-                </div>
-            </div>
-            <p class="tip-text">💡 Run multiple configurations and compare them in the History Leaderboard.</p>
-        </div>
-        <div class="visual-content">
-            <div class="placeholder-box">
-                <img src="{{ url_for('static', filename='images/parameters.png') }}" alt="Parameter Selection" class="ins-img">
-                <p class="caption">Effect of \( \lambda \) on equation sparsity.</p>
+                <p class="doc-img-caption">A correctly formatted state-space CSV — time in column 1, states after it.
+                </p>
             </div>
         </div>
-    </article>
 
-    <hr class="minimal-hr">
+        <hr class="doc-divider">
 
-    <!-- STEP 4 -->
-    <article class="instruction-row">
-        <div class="text-content">
-            <h2 class="step-title">04. Testing</h2>
-            <p>A good SINDy model should generalize beyond the training trajectory. In the <b>Test Tab</b>, verify this by simulating the discovered equations from entirely new initial conditions.</p>
-            <ul class="benefit-list">
-                <li><b>Load Test CSV:</b> A separate dataset generated from the same system but with different \( x_0 \). Do not use any portion of this for training to avoid overfitting.</li>
-                <li><b>Numerical Integration:</b> The model uses <code>solve_ivp</code> (RK45) to forward-simulate from the test initial condition.</li>
-                <li><b>RMSE on \( x(t) \):</b> Unlike training metrics (on \( \dot{X} \)), test RMSE is computed directly on the state trajectories.</li>
-            </ul>
-            <p class="alert-text">⚠️ A model can have low training RMSE on \( \dot{X} \) but still diverge when forward-simulated. Always test!</p>
+        <!-- ---- Phase 2: Model configuration ---- -->
+        <div class="doc-section-intro">
+            <span class="eyebrow">Model Configuration</span>
+            <h3 class="doc-title">Choosing How SINDy Learns</h3>
         </div>
-        <div class="visual-content">
-            <div class="placeholder-box">
-                <img src="../static/images/testtab.png" alt="Test Tab" class="ins-img">
-                <p class="caption">True trajectory (dots) vs SINDy simulation (line) from a new \( x_0 \).</p>
+
+        <h4 class="doc-subtitle">Train / validation split strategy</h4>
+        <p class="doc-intro-p">Derivatives \( \dot{X} \) are always computed once on the <i>full</i> trajectory first —
+            the split only decides how the resulting \( (X, \dot{X}) \) pairs are divided afterward. Three strategies
+            are available, and they test different things:</p>
+
+        <!-- 3 type of split in column format: text above, description image below-->
+        <!-- RANDOM SAMPLING -->
+        <div class="doc-grid">
+            <div class="doc-card">
+                <div class="doc-card-text">
+                    <p class="doc-item-name">Random Sampling</p>
+                    <p>
+                        Every point is shuffled independently into train or validation.
+                    </p>
+                </div>
+
+                <div class="doc-frame">
+                    <img src="{{ url_for('static', filename='images/split_randomblock.png') }}"
+                        alt="Random Sampling split example" class="doc-frame-img">
+                </div>
+
+                <p class="doc-img-caption">
+                    Random Sampling example.
+                </p>
+            </div>
+
+            <!-- TIME-BASED SPLIT -->
+            <div class="doc-card">
+                <div class="doc-card-text">
+                    <p class="doc-item-name">Time-based</p>
+                    <p>
+                        Training uses the earlier portion of the trajectory, validation the later portion.
+                    </p>
+                </div>
+
+                <div class="doc-frame">
+                    <img src="{{ url_for('static', filename='images/split_timebased.png') }}"
+                        alt="Time-based split example" class="doc-frame-img">
+                </div>
+
+                <p class="doc-img-caption">
+                    Time-based example.
+                </p>
+            </div>
+
+            <!-- RANDOM BLOCK SPLIT -->
+            <div class="doc-card">
+                <div class="doc-card-text">
+                    <p class="doc-item-name">Random Block</p>
+                    <p>
+                        Splits by contiguous random blocks instead of single points.
+                    </p>
+                </div>
+
+                <div class="doc-frame">
+                    <img src="{{ url_for('static', filename='images/split_timebased.png') }}"
+                        alt="Random Block split example" class="doc-frame-img">
+                </div>
+
+                <p class="doc-img-caption">
+                    Random Block example.
+                </p>
             </div>
         </div>
-    </article>
 
-    <hr class="minimal-hr">
 
-    <!-- STEP 5 -->
-    <article class="instruction-row">
-        <div class="text-content">
-            <h2 class="step-title">05. Predict Future Trajectories</h2>
-            <p>Once you have a validated model, use the <b>Predict Tab</b> to simulate the system into the future from any initial condition of your choice.</p>
-            <div class="config-details">
-                <div class="detail-item">
-                    <b>Select Model:</b>
-                    <p>Choose from any run in your History Leaderboard. Pick the one with the best validation and test metrics.</p>
-                </div>
-                <div class="detail-item">
-                    <b>Set Initial Conditions \( x_0 \):</b>
-                    <p>Enter comma-separated values for each state variable. Variable names are shown as hints based on your training data.</p>
-                </div>
-                <div class="detail-item">
-                    <b>Prediction Horizon:</b>
-                    <p>Set how far into the future (in seconds) to simulate. Longer horizons accumulate more integration error.</p>
-                </div>
+        <h4 class="doc-subtitle">Library, degree, and sparsity threshold</h4>
+        <div class="doc-row">
+            <div class="doc-row-text">
+                <p>The <b>Library</b> dropdown sets the candidate function space: <i>Polynomial</i>, <i>Fourier</i>, or
+                    <i>Combined</i> (both at once). <b>Degree / Harmonics</b> controls how high the polynomial power (or
+                    Fourier harmonic) goes — higher values allow more complex interactions but risk fitting noise.
+                </p>
+                <p>The <b>Sparsity Threshold \( (\lambda) \)</b> prunes small coefficients: higher \( \lambda \) means a
+                    simpler, sparser equation, but push it too far and real terms get removed too. Because the slider
+                    steps in coarse increments of \( 0.005 \), there's also a plain text field next to it — type an
+                    exact value (e.g. \( 0.0347 \)) and the slider updates to match, and vice versa.</p>
             </div>
-            <p class="tip-text">💡 The discovered equations are valid physics — they can predict behavior far beyond the original data range.</p>
-        </div>
-        <div class="visual-content">
-            <div class="placeholder-box">
-                <img src="../static/images/predicttab.png" alt="Predict Tab" class="ins-img">
-                <p class="caption">Future trajectory prediction from a custom \( x_0 \).</p>
+            <div class="doc-row-media">
+                <div class="doc-frame">
+                    <img src="{{ url_for('static', filename='images/trainvalsplit.png') }}"
+                        alt="Hyperparameter controls" class="doc-frame-img">
+                </div>
+                <p class="doc-img-caption">Split percentage and strategy are set independently from
+                    library/degree/threshold.</p>
             </div>
         </div>
-    </article>
+
+        <hr class="doc-divider">
+
+        <!-- ---- Phase 3: Leaderboard ---- -->
+        <div class="doc-section-intro">
+            <span class="eyebrow">Training Results</span>
+            <h3 class="doc-title">Reading the Leaderboard</h3>
+            <p>Every time you press <b>Train</b>, a new row is appended below, so you can compare configurations side by
+                side. Clicking a row re-renders that run's plots without re-fitting anything; the <b>Delete</b> button
+                removes a row.</p>
+        </div>
+        <table class="doc-table">
+            <thead>
+                <tr>
+                    <th>Column</th>
+                    <th>Meaning</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Data File / Split Type</td>
+                    <td>Which dataset and which split strategy produced this run.</td>
+                </tr>
+                <tr>
+                    <td>Library / Degree / Threshold</td>
+                    <td>The exact configuration used, for reproducibility.</td>
+                </tr>
+                <tr>
+                    <td>Train Metrics / Val Metrics</td>
+                    <td>\( R^2 \), RMSE, and MAE on the training vs. validation split — computed on \( \dot{X} \), not
+                        \( x(t) \).</td>
+                </tr>
+                <tr>
+                    <td>RMSE Diff</td>
+                    <td>\( | \text{RMSE}_{\text{train}} - \text{RMSE}_{\text{val}} | \). A large gap is an early warning
+                        sign of overfitting.</td>
+                </tr>
+                <tr>
+                    <td>Identified Equations</td>
+                    <td>The actual sparse ODE system SINDy recovered for this run.</td>
+                </tr>
+            </tbody>
+        </table>
+        <div class="doc-row-media">
+            <div class="doc-frame">
+                <img src="{{ url_for('static', filename='images/leaderboard.png') }}" alt="History Leaderboard"
+                    class="doc-frame-img">
+            </div>
+            <p class="doc-img-caption">A run's statistics are record after training.</p>
+        </div>
+
+        <hr class="doc-divider">
+
+        <!-- ---- Phase 4: Residual diagnostics ---- -->
+        <div class="doc-section-intro">
+            <span class="eyebrow">Model Diagnosis</span>
+            <h3 class="doc-title">Residual Diagnostics</h3>
+            <p>A <b>residual</b> is simply the leftover error the model didn't explain: for each state variable, \(
+                \text{residual} = \dot{x}_{\text{true}} - \dot{x}_{\text{predicted}} \), computed across the <i>full</i>
+                dataset (train + validation combined — so these numbers aren't directly comparable to the Train/Val
+                metrics in the leaderboard above). If SINDy has found the right terms, whatever is left over should look
+                like structureless noise. If it hasn't, the leftover error still carries a pattern — and that pattern
+                tells you what's missing.</p>
+        </div>
+
+        <!-- 3 type of residual stats: format text above, image below, separate into 3 columns, use all the width we had-->
+         <!-- RESIDUAL VS. TIME-->
+        <div class="doc-grid">
+            <div class="doc-card">
+                <div class="doc-card-text">
+                    <p class="doc-item-name">Residual vs. time</p>
+                    <p>
+                    A well-fit model's residuals should scatter randomly around zero with no visible trend. A repeating
+                    wave or drift in the residual means the library is missing a term that captures that behavior
+                    </p>
+                </div>
+
+                <div class="doc-frame">
+                    <img src="{{ url_for('static', filename='images/residual_time.png') }}"
+                        alt="Residual vs .time example" class="doc-frame-img">
+                </div>
+
+                <p class="doc-img-caption">
+                    Residual vs time example.
+                </p>
+            </div>
+
+            <!-- RESIDUAL FFT -->
+            <div class="doc-card">
+                <div class="doc-card-text">
+                    <p class="doc-item-name">Residual FFT (frequency content)</p>
+                    <p>
+                        <p>Same residual, viewed as a frequency spectrum. A flat spectrum with no dominant peak confirms the
+                    error really is noise. A sharp peak means there's periodic structure left over.</p>
+                    </p>
+                </div>
+
+                <div class="doc-frame">
+                    <img src="{{ url_for('static', filename='images/residual_fft.png') }}"
+                        alt="Residual FFT example" class="doc-frame-img">
+                </div>
+
+                <p class="doc-img-caption">
+                    Residual FFT example.
+                </p>
+            </div>
+
+            <!-- TRUE VS. PREDICTED DERIVATIVE -->
+            <div class="doc-card">
+                <div class="doc-card-text">
+                    <p class="doc-item-name">True vs. predicted derivative</p>
+                    <p>
+                        Each point plots \( \dot{x}_{\text{predicted}} \) against \( \dot{x}_{\text{true}} \) for one sample.
+                    A perfect model places every point on the \( y = x \) diagonal. Curvature or fanning away from that
+                    line signals bias or error.
+                    </p>
+                </div>
+
+                <div class="doc-frame">
+                    <img src="{{ url_for('static', filename='images/derivative_comparison.png') }}"
+                        alt="True vs. predicted derivative" class="doc-frame-img">
+                </div>
+
+                <p class="doc-img-caption">
+                    True vs. predicted derivative example.
+                </p>
+            </div>
+        </div>
+
+        <h4 class="doc-subtitle">Reading the stats line</h4>
+        <dl class="def-list">
+            <dt>\( R^2(\dot{X}) \)</dt>
+            <dd>Fraction of derivative variance explained by the model, per variable — same idea as leaderboard \( R^2
+                \), but on the combined dataset.</dd>
+            <dt>SNR (dB)</dt>
+            <dd>Signal-to-noise ratio of the residual. Higher means the leftover error is small relative to the signal
+                itself.</dd>
+            <dt>Autocorrelation</dt>
+            <dd>Whether consecutive residuals are correlated with each other. Close to zero supports "random noise"; a
+                high value supports "still-structured error".</dd>
+        </dl>
+
+    </section>
+
+    <!-- =====================================================================
+         TEST SUB-TAB — placeholder, to be written next pass
+         (content plan: model selection -> test data source -> run & read
+         results -> why test differs from train, mapped from test_tab.py)
+    ====================================================================== -->
+    <section class="subtab-panel" data-panel="test" hidden>
+        <div class="doc-section-intro">
+            <span class="eyebrow">Coming Next</span>
+            <h3 class="doc-title">Test Tab Instructions</h3>
+            <p class="placeholder-text">This section is being written next — it will cover model selection,
+                out-of-sample test data, forward simulation, and how to read the RMSE / \( R^2 \) results table.</p>
+        </div>
+    </section>
+
+    <!-- =====================================================================
+         PREDICT SUB-TAB — placeholder, to be written next pass
+         (content plan: model + x0 -> horizon -> run predict -> reading
+         simulation-failure warnings, mapped from predict_tab.py)
+    ====================================================================== -->
+    <section class="subtab-panel" data-panel="predict" hidden>
+        <div class="doc-section-intro">
+            <span class="eyebrow">Coming Next</span>
+            <h3 class="doc-title">Predict Tab Instructions</h3>
+            <p class="placeholder-text">This section is being written next — it will cover setting initial conditions,
+                choosing a prediction horizon, and interpreting simulation-failure warnings.</p>
+        </div>
+    </section>
+
 </div>
 
 <style>
+    /* ==========================================================================
+       Design tokens — aligned to storyline.html's system (var(--primary),
+       var(--accent), light #e9ecef borders, white cards) so this fragment
+       reads as the same product regardless of which tab loads first.
+       ========================================================================== */
     .minimal-container {
-        max-width: 1000px;
+        --ink: var(--primary);
+        --ink-soft: #4f5f6f;
+        --muted: #8a94a0;
+        /* --line: #641a5e; */
+        --tip-ink: var(--accent);
+        --warn-ink: #b45309;
+        max-width: 1080px;
         margin: 0 auto;
-        padding: 40px 20px;
+        padding: 24px 20px 80px;
     }
-    .page-header { margin-bottom: 50px; text-align: left; }
+
+    .page-header {
+        margin-bottom: 28px;
+        background-color: #b2e3f4;
+    }
+
     .minimal-title {
         font-size: 28px;
-        color: #2c3e50;
+        color: var(--ink);
         font-weight: 700;
-        margin-bottom: 10px;
+        margin-bottom: 8px;
         letter-spacing: -0.5px;
     }
-    .main-subtitle { font-size: 17px; color: #7f8c8d; }
 
-    .instruction-row {
-        display: flex;
-        gap: 50px;
-        align-items: flex-start;
-        margin-bottom: 60px;
-    }
-    .text-content { flex: 1.2; }
-    .visual-content { flex: 1; }
-
-    .step-title {
-        font-size: 22px;
-        color: #2c3e50;
-        margin-bottom: 16px;
-        font-weight: 700;
-        border-left: 5px solid #3498db;
-        padding-left: 15px;
-    }
-
-    p, li {
+    .main-subtitle {
         font-size: 16px;
-        line-height: 1.8;
         color: #4f5f6f;
+        margin: 0;
     }
 
-    .minimal-hr {
-        border: 0;
-        border-top: 1px solid #eee;
-        margin: 20px 0 60px 0;
+    /* ---------- Sub-tab pills ---------- */
+    .subtab-nav {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 40px;
+        border-bottom: 1px solid var(--line);
     }
 
-    .alert-text { color: #856404; font-size: 14px; margin-top: 15px; }
-    .tip-text   { color: #27ae60; font-size: 15px; margin-top: 15px; }
-
-    .detail-item {
-        margin-bottom: 16px;
-        border-left: 3px solid #3498db;
-        padding-left: 15px;
-    }
-    .detail-item b  { color: #2c3e50; font-size: 15px; }
-    .detail-item p  { font-size: 15px; margin: 4px 0 0 0; }
-
-    code {
-        background: #f1f1f1;
-        padding: 2px 6px;
-        border-radius: 4px;
-        font-size: 13px;
-        color: #c0392b;
-    }
-
-    .ins-img {
-        max-width: 100%;
-        height: auto;
-        border-radius: 8px;
-        border: 1px solid #eee;
-    }
-    .placeholder-box { text-align: center; }
-    .caption { font-size: 13px; color: #95a5a6; margin-top: 10px; }
-
-    .action-footer {
-        text-align: center;
-        padding: 30px 40px;
-        background: #f8f9fa;
-        border-radius: 12px;
-        font-size: 16px;
+    .subtab-btn {
+        border: none;
+        background: none;
+        cursor: pointer;
+        font-size: 15px;
         font-weight: 600;
-        color: #2c3e50;
-        margin-top: 20px;
+        color: var(--muted);
+        padding: 10px 4px;
+        margin-bottom: -1px;
+        border-bottom: 2px solid transparent;
+        transition: color 0.15s, border-color 0.15s;
     }
 
-    @media (max-width: 768px) {
-        .instruction-row { flex-direction: column; }
+    .subtab-btn+.subtab-btn {
+        margin-left: 18px;
+    }
+
+    .subtab-btn:hover {
+        color: var(--ink);
+    }
+
+    .subtab-btn.active {
+        color: var(--ink);
+        border-bottom-color: var(--accent);
+    }
+
+    /* ---------- Section intros (no image, full width) ---------- */
+    .doc-section-intro {
+        margin-bottom: 18px;
+    }
+
+    .doc-divider {
+        border: none;
+        border-top: 1px solid var(--line);
+        margin: 22px 0;
+    }
+
+    .eyebrow {
+        display: block;
+        font-size: 11.5px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin-bottom: 6px;
+    }
+
+    .doc-title {
+        font-size: 22px;
+        color: var(--ink);
+        font-weight: 700;
+        margin: 0 0 14px 0;
+    }
+
+    .doc-subtitle {
+        font-size: 16px;
+        color: var(--ink);
+        font-weight: 700;
+        margin: 34px 0 14px 0;
+    }
+
+    p {
+        font-size: 15.5px;
+        line-height: 1.75;
+        color: var(--ink-soft);
+        margin: 0 0 14px 0;
+    }
+
+    .doc-intro-p {
+        max-width: 760px;
+    }
+
+    p b {
+        color: var(--ink);
+    }
+
+    /* Inline note — icon + bold label, no box/border, just colored accent */
+    .note {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        font-size: 14.5px;
+        margin: 4px 0 0 0;
+    }
+
+    .note svg {
+        flex: none;
+        width: 15px;
+        height: 15px;
+        margin-top: 3px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+
+    .note-tip {
+        color: var(--tip-ink);
+    }
+
+    .note-alert {
+        color: var(--warn-ink);
+    }
+
+    .note span {
+        color: var(--ink-soft);
+    }
+
+    .note b {
+        color: inherit;
+    }
+
+    /* ==========================================================================
+       TEXT-LEFT / IMAGE-RIGHT ROWS — same ratio and framing as the
+       storyline.html hero/proof sections (sd-hero, sd-proof).
+       ========================================================================== */
+    .doc-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 48px;
+        margin-bottom: 8px;
+    }
+
+    .doc-row-compact {
+        margin-bottom: 30px;
+    }
+
+    .doc-row-text {
+        flex: 1.15;
+    }
+
+    .doc-row-media {
+        flex: 0.85;
+    }
+
+    .doc-item-name {
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--ink);
+        margin: 0 0 6px 0;
+    }
+
+    .doc-frame {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+        background: #fff;
+    }
+
+    .doc-frame-img {
+        display: block;
+        width: 100%;
+        height: auto;
+    }
+
+    .doc-img-caption {
+        font-size: 12.5px;
+        color: var(--muted);
+        margin: 10px 0 0 0;
+        text-align: center;
+        font-style: italic;
+    }
+
+    /* ===== 3-column layout ===== */
+
+    .doc-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 32px;
+        margin: 24px 0;
+    }
+
+    .doc-card {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .doc-card-text {
+        flex: 1;
+        margin-bottom: 16px;
+    }
+
+    .doc-item-name {
+        font-size: 16px;
+        font-weight: 700;
+        margin: 0 0 8px;
+    }
+
+    .doc-frame {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        overflow: hidden;
+        background: #fff;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, .06);
+    }
+
+    .doc-frame-img {
+        width: 100%;
+        display: block;
+    }
+
+    .doc-img-caption {
+        margin-top: 10px;
+        font-size: 12.5px;
+        color: var(--muted);
+        text-align: center;
+        font-style: italic;
+    }
+
+    /* ---------- Definition list (stats line) ---------- */
+    .def-list {
+        margin: 0 0 20px 0;
+        max-width: 760px;
+    }
+
+    .def-list dt {
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--ink);
+        margin-top: 12px;
+    }
+
+    .def-list dd {
+        font-size: 15px;
+        line-height: 1.7;
+        color: var(--ink-soft);
+        margin: 2px 0 0 0;
+    }
+
+    /* ---------- Table (leaderboard columns) ---------- */
+    .doc-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 10px 0 24px 0;
+    }
+
+    .doc-table th,
+    .doc-table td {
+        text-align: left;
+        font-size: 14px;
+        padding: 10px 12px 10px 0;
+        /* border-bottom: 1px solid var(--line); */
+        color: var(--ink-soft);
+        vertical-align: top;
+    }
+
+    .doc-table th {
+        color: var(--ink);
+        font-weight: 700;
+        text-transform: uppercase;
+        font-size: 11.5px;
+        letter-spacing: 0.04em;
+    }
+
+    .doc-table td:first-child {
+        color: var(--ink);
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .placeholder-text {
+        font-style: italic;
+        color: var(--muted);
+    }
+
+    @media (max-width: 860px) {
+        .doc-row {
+            flex-direction: column;
+        }
+
+        .doc-row-media {
+            width: 100%;
+        }
     }
 </style>
+
+<script>
+    // ==========================================================================
+    // Sub-tab switching (Train / Test / Predict). Plain client-side toggle —
+    // no fetch, no new route, since all three panels already live in this
+    // fragment. Re-typesets MathJax on every switch so formulas in a panel
+    // that was hidden at initial load still render correctly.
+    // ==========================================================================
+    (function () {
+        var buttons = document.querySelectorAll('.subtab-btn');
+        var panels = document.querySelectorAll('.subtab-panel');
+
+        function activate(targetName) {
+            panels.forEach(function (panel) {
+                panel.hidden = panel.getAttribute('data-panel') !== targetName;
+            });
+            buttons.forEach(function (btn) {
+                btn.classList.toggle('active', btn.getAttribute('data-target') === targetName);
+            });
+            if (window.MathJax && window.MathJax.typesetPromise) {
+                window.MathJax.typesetPromise();
+            }
+        }
+
+        buttons.forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                activate(btn.getAttribute('data-target'));
+            });
+        });
+    })();
+</script>
