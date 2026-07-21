@@ -17,7 +17,7 @@
 # =============================================================================
 
 from bokeh.models import (ColumnDataSource, Slider, Div, Button,
-                          Select, DataTable, TableColumn, HTMLTemplateFormatter, FileInput, TextInput)
+                          Select, DataTable, TableColumn, HTMLTemplateFormatter, FileInput, TextInput, CheckboxButtonGroup)
 from bokeh.layouts import column, row
 from bokeh.plotting import figure
 import pandas as pd
@@ -49,7 +49,6 @@ def train_tab_layout(engine, trained_model_storage):
     bokeh.layouts.column
         The complete tab layout, ready to be added to a Bokeh document.
     """
-
 
     def apply_suggestion(df, prefix_msg=""):
         """
@@ -144,10 +143,11 @@ def train_tab_layout(engine, trained_model_storage):
     # could be set to sum to less/more than 100%.)
     train_s = Slider(start=10, end=90, value=60, step=5,
                      title="Train/Validation Split")
+
     def on_train_s_change(attr, old, new):
         """Keep the human-readable split label in sync with the slider."""
         train_s.title = f"SPLIT: TRAIN {new}% | VALIDATION {100 - new}%"
-        
+
     train_s.on_change('value', on_train_s_change)
     # Initialize title immediately
     on_train_s_change(None, None, train_s.value)
@@ -162,8 +162,6 @@ def train_tab_layout(engine, trained_model_storage):
         ],
         width=150,
     )
-
-
 
     poly_s = Slider(start=1, end=5,     value=1,
                     step=1,     title="DEGREE / HARMONICS")
@@ -318,6 +316,53 @@ def train_tab_layout(engine, trained_model_storage):
     p.scatter([], [], alpha=0)
     p.legend.click_policy = "hide"
 
+    # Storage for main-plot renderers, keyed by state index, so the toggle
+    # callbacks below can reach in and adjust alpha per (state, role) pair.
+    # Populated fresh each render_plot() call.
+    _main_renderers = {}   # {state_idx: {'train': renderer, 'val': renderer, 'fit': renderer}}
+
+    # Two independent toggle groups — this is why we don't use Bokeh's native
+    # legend click_policy here: a single legend can only group renderers along
+    # ONE axis (either "by state" or "by role"), but we want both axes toggled
+    # independently (e.g. mute state x2 AND separately hide all fit lines).
+    state_toggle = CheckboxButtonGroup(
+        labels=[], active=[], button_type="default")
+    layer_toggle = CheckboxButtonGroup(
+        labels=["Data points", "SINDy fit"], active=[0, 1], button_type="default")
+
+    # Static color key (state name -> color) since state_toggle button labels
+    # are plain text and can't carry per-button color — this Div is the visual
+    # reference, the buttons next to it are what actually drive visibility.
+    state_key_div = Div(text="", styles={'padding': '2px 0'})
+
+    def _update_main_visibility(attr, old, new):
+        """
+        Recompute alpha for every renderer on the main plot as the AND of
+        (state selected in state_toggle) and (its role selected in
+        layer_toggle). Fading (not full hide) so a de-selected state stays
+        spatially legible relative to the ones still highlighted.
+        """
+        active_states = set(state_toggle.active)
+        data_on = 0 in set(layer_toggle.active)
+        fit_on = 1 in set(layer_toggle.active)
+
+        for i, rends in _main_renderers.items():
+            state_on = i in active_states
+
+            train_alpha = 0.35 if (state_on and data_on) else 0.04
+            val_alpha = 0.55 if (state_on and data_on) else 0.04
+            fit_alpha = 1.0 if (state_on and fit_on) else 0.06
+
+            rends['train'].glyph.fill_alpha = train_alpha
+            rends['train'].glyph.line_alpha = train_alpha
+            rends['val'].glyph.fill_alpha = val_alpha
+            rends['val'].glyph.line_alpha = val_alpha
+            if rends['fit'] is not None:
+                rends['fit'].glyph.line_alpha = fit_alpha
+
+    state_toggle.on_change('active', _update_main_visibility)
+    layer_toggle.on_change('active', _update_main_visibility)
+
     res_div = Div(
         text="<h3>Run Equations:</h3>",
         styles={'background': '#f8f9fa',
@@ -404,12 +449,10 @@ def train_tab_layout(engine, trained_model_storage):
 
     def render_plot(run_id):
         """
-        Redraw the main result plot (Section 5) from the stored plot_data
-        of a given run. Overlays ALL state variables (previously only the
-        first one, X[:, 0]) — train points, validation points, and the
-        SINDy-simulated line for a given variable all share one legend_label,
-        so Bokeh groups them into a single legend entry: clicking it mutes
-        all three renderers for that variable together.
+        Redraw the main result plot from the stored plot_data of a given run.
+        Overlays all state variables. Visibility is driven entirely by
+        state_toggle / layer_toggle (see _update_main_visibility) — no
+        Bokeh legend interactivity on this plot.
         """
         data = trained_model_storage[run_id]['plot_data']
         t, X = data['t'], data['X']
@@ -420,40 +463,53 @@ def train_tab_layout(engine, trained_model_storage):
             [f"x{i+1}" for i in range(X.shape[1])]
 
         p.renderers = []
-        if p.legend and len(p.legend) > 0:
-            p.legend.items = []
+        _main_renderers.clear()
 
         n_vars = X.shape[1]
+        color_key_parts = []
+
         for i in range(n_vars):
+            color = _DIAG_COLORS[i % len(_DIAG_COLORS)]
             label = names[i] if i < len(names) else f"x{i+1}"
 
-            # Data points: neutral gray, low-key — role is "ground truth", not tied
-            # to a specific state's color. Marker shape still separates train/val.
-            p.scatter(t[train_idx], X[train_idx, i],
-              color="#1f77b4", alpha=0.35, size=4,
-              legend_label=label,
-              muted_color="#9aa4ad", muted_alpha=0.04)
-            p.scatter(t[val_idx], X[val_idx, i],
-              color="#ff7f0e", alpha=0.35, size=5,
-              legend_label=label,
-              muted_color="#9aa4ad", muted_alpha=0.04)
-            # Fit line: this is the only element that carries the state's color,
-            # drawn on top with full saturation — nothing else competes with it
-            # for that hue, so it reads clearly through the data cloud regardless
-            # of fit quality.
+            # Data points stay neutral gray — color is reserved for the fit
+            # line only, so a well-fit curve never gets visually swallowed
+            # by same-colored data points (see earlier fix).
+            r_train = p.scatter(t[train_idx], X[train_idx, i],
+                                color="#1f77b4", alpha=0.35, size=4, marker="circle")
+            r_val = p.scatter(t[val_idx], X[val_idx, i],
+                              color="#ff7f0e", alpha=0.55, size=5, marker="circle_x")
+            r_fit = None
             if x_sim_full is not None:
-                p.line(t, x_sim_full[:, i],
-                    color="#2ca02c", line_width=2.8,
-                    legend_label=label,
-                    muted_color="#2ca02c", muted_alpha=0.06)
-        p.legend.click_policy = "hide"
-        p.legend.location = "top_right"
+                r_fit = p.line(t, x_sim_full[:, i],
+                               color=color, line_width=2.8)
+
+            _main_renderers[i] = {'train': r_train, 'val': r_val, 'fit': r_fit}
+            color_key_parts.append(
+                f"<span style='color:{color}; font-weight:700;'>●</span> "
+                f"<span style='color:#2c3e50;'>{label}</span>"
+            )
+
+        state_key_div.text = (
+            "<div style='font-size:12px;'>" +
+            "&nbsp;&nbsp;".join(color_key_parts) + "</div>"
+        )
+
+        # Re-sync the two toggle groups to this run: fresh labels, everything
+        # visible by default.
+        state_toggle.labels = names[:n_vars] if len(names) >= n_vars else \
+            [f"x{i+1}" for i in range(n_vars)]
+        state_toggle.active = list(range(n_vars))
+        layer_toggle.active = [0, 1]
+        # apply default alphas immediately
+        _update_main_visibility(None, None, None)
+
         p.title.text = f"Model Result — Run #{run_id}"
         view_div.text = f"<b style='color:#2c3e50;'>👁 Viewing Run #{run_id}</b>"
 
     # Shared color palette for multi-variable diagnostic plots (cycles if
     # a system has more than 5 state variables).
-    _DIAG_COLORS = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd"]
+    _DIAG_COLORS = ["#61e0ee", "#ebc626", "#2ca02c", "#d62728", "#9467bd"]
 
     def _render_diag_plots(diag):
         """
@@ -680,7 +736,6 @@ def train_tab_layout(engine, trained_model_storage):
         }
         source_history.stream(new_entry)
 
-
         # ── 8. Persist everything needed to reconstruct this run later ─────
         # (used by render_plot/_render_diag_plots on row-select, and by the
         # Test/Predict tabs to simulate from a saved model instance).
@@ -750,10 +805,12 @@ def train_tab_layout(engine, trained_model_storage):
         # main result plot back to an empty state.
         if view_div.text and f"Run #{run_id}" in view_div.text:
             p.renderers = []
-            if p.legend:
-                p.legend.items = []
             p.title.text = "Model Result"
             view_div.text = ""
+            _main_renderers.clear()
+            state_toggle.labels = []
+            state_toggle.active = []
+            state_key_div.text = ""
 
         # Clear all 3 diagnostic plots too.
         for figs in [p_resid, p_fft, p_scatter]:
@@ -790,7 +847,8 @@ def train_tab_layout(engine, trained_model_storage):
     top_row = row(
         column(file_select, file_input, train_s, split_select, library_select,
                poly_s, thr_s, thr_input, row(btn_train, btn_delete), width=320),
-        column(p,split_key_div ,view_div, sizing_mode="stretch_width"),
+        column(p, state_key_div, row(state_toggle, layer_toggle, split_key_div),
+               view_div, sizing_mode="stretch_width"),
         sizing_mode="stretch_width"
     )
 
