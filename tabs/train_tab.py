@@ -18,7 +18,7 @@
 
 from bokeh.models import (ColumnDataSource, Slider, Div, Button,
                           Select, DataTable, TableColumn, HTMLTemplateFormatter, FileInput, TextInput, CheckboxButtonGroup)
-from bokeh.layouts import column, row
+from bokeh.layouts import column, row, Spacer
 from bokeh.plotting import figure
 import pandas as pd
 import numpy as np
@@ -349,9 +349,9 @@ def train_tab_layout(engine, trained_model_storage):
         for i, rends in _main_renderers.items():
             state_on = i in active_states
 
-            train_alpha = 0.35 if (state_on and data_on) else 0.04
-            val_alpha = 0.55 if (state_on and data_on) else 0.04
-            fit_alpha = 1.0 if (state_on and fit_on) else 0.06
+            train_alpha = 0.35 if (state_on and data_on) else 0
+            val_alpha = 0.55 if (state_on and data_on) else 0
+            fit_alpha = 1.0 if (state_on and fit_on) else 0
 
             rends['train'].glyph.fill_alpha = train_alpha
             rends['train'].glyph.line_alpha = train_alpha
@@ -437,15 +437,6 @@ def train_tab_layout(engine, trained_model_storage):
     # somewhere the student can't miss — this is pedagogically load-bearing
     # since the whole point of this plot is showing HOW the split partitions
     # the data differently per split strategy.
-    split_key_div = Div(
-        text=(
-            "<div style='font-size:12px; color:#5c6b78; padding:4px 0;'>"
-            "<b style='color:#1f77b4;'>Train points</b> &nbsp;&nbsp;"
-            "<b style='color:#ff7f0e;'>Validation points</b> &nbsp;&nbsp;"
-            "<span style='color:#2ca02c;'>SINDy fit</span>"
-            "</div>"
-        )
-    )
 
     def render_plot(run_id):
         """
@@ -476,9 +467,9 @@ def train_tab_layout(engine, trained_model_storage):
             # line only, so a well-fit curve never gets visually swallowed
             # by same-colored data points (see earlier fix).
             r_train = p.scatter(t[train_idx], X[train_idx, i],
-                                color="#1f77b4", alpha=0.35, size=4, marker="circle")
+                                color="#1f77b4", alpha=0.35, size=4, legend_label="Train points")
             r_val = p.scatter(t[val_idx], X[val_idx, i],
-                              color="#ff7f0e", alpha=0.55, size=5, marker="circle_x")
+                              color="#ff7f0e", alpha=0.55, size=4, legend_label="Val points")
             r_fit = None
             if x_sim_full is not None:
                 r_fit = p.line(t, x_sim_full[:, i],
@@ -489,9 +480,11 @@ def train_tab_layout(engine, trained_model_storage):
                 f"<span style='color:{color}; font-weight:700;'>●</span> "
                 f"<span style='color:#2c3e50;'>{label}</span>"
             )
+            p.legend.location = "top_right"
+            p.legend.click_policy = "hide"
 
         state_key_div.text = (
-            "<div style='font-size:12px;'>" +
+            "<div style='font-size:14px;'>" +
             "&nbsp;&nbsp;".join(color_key_parts) + "</div>"
         )
 
@@ -847,7 +840,10 @@ def train_tab_layout(engine, trained_model_storage):
     top_row = row(
         column(file_select, file_input, train_s, split_select, library_select,
                poly_s, thr_s, thr_input, row(btn_train, btn_delete), width=320),
-        column(p, state_key_div, row(state_toggle, layer_toggle, split_key_div),
+        column(p, 
+               # the row below is to align: "center", but since bokeh doesnt have that css style, so we use Spacer instead
+               row(Spacer(sizing_mode="stretch_width"), state_key_div, Spacer(sizing_mode="stretch_width"), sizing_mode="stretch_width"),
+               row(Spacer(sizing_mode="stretch_width"), row(state_toggle, layer_toggle), Spacer(sizing_mode="stretch_width"), sizing_mode="stretch_width"),
                view_div, sizing_mode="stretch_width"),
         sizing_mode="stretch_width"
     )
