@@ -34,6 +34,10 @@ def train():
 def test():
     return render_template("fragment/testing.html")
 
+@app.route("/fragment/predicting")
+def predict():
+    return render_template("fragment/predicting.html")
+
 
 @app.route("/fragment/questions")
 def questions():

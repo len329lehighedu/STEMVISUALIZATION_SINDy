@@ -33,6 +33,10 @@
             Test
         </a>
 
+        <a href="#" class="nav-link" data-page="predicting" onclick="loadPage('predicting', this); return false;">
+            Predict
+        </a>
+
         <a href="#" class="nav-link" data-page="questions" onclick="loadPage('questions', this); return false;">
             Questions
         </a>
@@ -150,7 +154,7 @@
             }
         }
 
-        // When open page
+        // When open module
         document.addEventListener("DOMContentLoaded", () => {
 
             const firstTab = document.querySelector(
