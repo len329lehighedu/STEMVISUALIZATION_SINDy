@@ -25,8 +25,12 @@
             SINDy
         </a>
 
-        <a href="#" class="nav-link" data-page="instructions" onclick="loadPage('instructions', this); return false;">
-            Instructions
+        <a href="#" class="nav-link" data-page="training" onclick="loadPage('training', this); return false;">
+            Train
+        </a>
+
+        <a href="#" class="nav-link" data-page="testing" onclick="loadPage('testing', this); return false;">
+            Test
         </a>
 
         <a href="#" class="nav-link" data-page="questions" onclick="loadPage('questions', this); return false;">
@@ -146,7 +150,7 @@
             }
         }
 
-        // Khi mở trang
+        // When open page
         document.addEventListener("DOMContentLoaded", () => {
 
             const firstTab = document.querySelector(

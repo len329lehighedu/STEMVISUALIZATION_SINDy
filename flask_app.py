@@ -25,9 +25,14 @@ def about():
     return render_template("fragment/about.html")
 
 
-@app.route("/fragment/instructions")
-def instructions():
-    return render_template("fragment/instructions.html")
+@app.route("/fragment/training")
+def train():
+    return render_template("fragment/training.html")
+
+
+@app.route("/fragment/testing")
+def test():
+    return render_template("fragment/testing.html")
 
 
 @app.route("/fragment/questions")
