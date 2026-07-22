@@ -26,6 +26,7 @@ import os
 import copy
 import base64
 import io
+import warnings
 from engine.suggester import analyze_data_linearity
 
 
@@ -426,10 +427,14 @@ def train_tab_layout(engine, trained_model_storage):
     counter = [0]   # run counter — monotonically increasing, never reset
     # even after deletions (see project history: run IDs
     # are intentionally permanent to avoid ambiguity).
-    view_div = Div(
+    user_warning_div = Div(
         text="",
         styles={'color': '#7f8c8d', 'font-size': '13px', 'padding': '4px 0'}
     )
+    # Tracks which run_id is currently displayed on the main plot — used by
+    # on_delete_click to decide whether to clear the plot, now that
+    # user_warning_div's text no longer always contains "Run #{run_id}".
+    _current_view_run = [None]
     # Static role-legend — separate from Bokeh's interactive per-state legend.
     # Needed because merging train/val/fit under one legend_label per state
     # (for mute-by-variable) removes the old separate "Train points"/"Val
@@ -498,7 +503,16 @@ def train_tab_layout(engine, trained_model_storage):
         _update_main_visibility(None, None, None)
 
         p.title.text = f"Model Result — Run #{run_id}"
-        view_div.text = f"<b style='color:#2c3e50;'>👁 Viewing Run #{run_id}</b>"
+        _current_view_run[0] = run_id
+
+        # user_warning_div: shows the fit warning for this run (e.g.
+        # sparsity threshold too high -> all coefficients eliminated) if
+        # one was recorded, otherwise just confirms the run trained fine.
+        warning_msg = trained_model_storage[run_id].get('warning')
+        if warning_msg:
+            user_warning_div.text = f"<b style='color:#d91212;'>⚠ {warning_msg}</b>"
+        else:
+            user_warning_div.text = "<b style='color:#27ae60;'>✅ Train complete</b>"
 
     # Shared color palette for multi-variable diagnostic plots (cycles if
     # a system has more than 5 state variables).
@@ -675,18 +689,24 @@ def train_tab_layout(engine, trained_model_storage):
         # resulting (X, dX) pairs are split randomly — this is more robust
         # than splitting the raw time series first, because finite-difference
         # derivatives near a split boundary would otherwise be biased.
+        fit_warning_msg = None
         try:
-            model, train_idx, val_idx, m_train, m_val = \
-                engine.fit_model(
-                    X, t,
-                    poly_degree=poly_s.value,
-                    threshold=thr_s.value,
-                    names=names,
-                    lib_type=library_select.value,
-                    train_frac=train_frac,
-                    random_seed=counter[0] * 7,  # unique seed per run
-                    split_method=split_select.value.lower()
-                )
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                model, train_idx, val_idx, m_train, m_val = \
+                    engine.fit_model(
+                        X, t,
+                        poly_degree=poly_s.value,
+                        threshold=thr_s.value,
+                        names=names,
+                        lib_type=library_select.value,
+                        train_frac=train_frac,
+                        random_seed=counter[0] * 7,  # unique seed per run
+                        split_method=split_select.value.lower()
+                    )
+                if caught:
+                    # keep the last warning message, as it's the most important
+                    fit_warning_msg = str(caught[-1].message)
         except Exception as e:
             res_div.text = f"<span style='color:red;'>⚠ Fit error: {e}</span>"
             return
@@ -750,6 +770,7 @@ def train_tab_layout(engine, trained_model_storage):
                 'val_r2':     v_r2,
             },
             'equations':  raw_eqs,
+            'warning':    fit_warning_msg,
             'plot_data': {
                 't':         t,
                 'X':         X,
@@ -796,10 +817,11 @@ def train_tab_layout(engine, trained_model_storage):
 
         # If the deleted run was the one currently displayed, clear the
         # main result plot back to an empty state.
-        if view_div.text and f"Run #{run_id}" in view_div.text:
+        if _current_view_run[0] == run_id:
             p.renderers = []
             p.title.text = "Model Result"
-            view_div.text = ""
+            user_warning_div.text = ""
+            _current_view_run[0] = None
             _main_renderers.clear()
             state_toggle.labels = []
             state_toggle.active = []
@@ -839,9 +861,8 @@ def train_tab_layout(engine, trained_model_storage):
 
     top_row = row(
         column(file_select, file_input, train_s, split_select, library_select,
-               poly_s, thr_s, thr_input, row(btn_train, btn_delete), width=320),
+               poly_s, thr_s, thr_input, row(btn_train, btn_delete), user_warning_div, width=320),
         column(p, 
-               view_div,
                # the row below is to align: "center", but since bokeh doesnt have that css style, so we use Spacer instead
                row(Spacer(sizing_mode="stretch_width"), state_key_div, Spacer(sizing_mode="stretch_width"), sizing_mode="stretch_width"),
                row(Spacer(sizing_mode="stretch_width"), row(state_toggle, layer_toggle), Spacer(sizing_mode="stretch_width"), sizing_mode="stretch_width"),
