@@ -1,6 +1,6 @@
 # tabs/predict_tab.py
 
-from bokeh.models import ColumnDataSource, Slider, Button, Select, Div, TextInput
+from bokeh.models import ColumnDataSource, Slider, Button, Select, Div, TextInput, HoverTool
 from bokeh.layouts import column, row
 from bokeh.plotting import figure
 import numpy as np
@@ -74,9 +74,15 @@ def predict_tab_layout(engine, trained_model_storage):
     # -------------------------------------------------------------------------
     p_pred = figure(title="Future Trajectory Prediction",
                     sizing_mode="stretch_width", height=500,
-                    x_axis_label="Time (s)", y_axis_label="State")
+                    x_axis_label="Time (s)", y_axis_label="")
     p_pred.scatter([], [], alpha=0)
     p_pred.legend.click_policy = "hide"
+    
+    # Hovertool for prediction plot. same set up as train tab and test tab
+    hover_pred = HoverTool(
+        renderers=[],mode="vline",tooltips=[("t", "@t{0.000}")],
+    )
+    p_pred.add_tools(hover_pred)
 
     source_pred = ColumnDataSource(data={})
     renderers   = {}
@@ -164,11 +170,19 @@ def predict_tab_layout(engine, trained_model_storage):
                 source=source_pred,
                 color=colors[i % len(colors)],
                 line_width=2,
-                legend_label=f"Predicted {name}"
+                legend_label=f"{name}"
             )
 
         p_pred.legend.click_policy = "hide"
         p_pred.legend.location     = "top_right"
+        
+        # rebuild tooltip corresponding to var_names of this run
+        # Then point hover to the predicted lines just draw above 
+        hover_pred.tooltips = [("t", "@t{0.000}")] + [
+            (name, f"@{{{name}}}{{0.0000}}") for name in var_names
+        ]
+        hover_pred.renderers = list(renderers.values())
+        
         p_pred.title.text = (
             f"Future Trajectory — Run #{run_id} | "
             f"x₀ = [{', '.join([f'{v:.2g}' for v in x0])}]"
@@ -193,6 +207,9 @@ def predict_tab_layout(engine, trained_model_storage):
         p_pred.legend.items = []
         renderers.clear()
         source_pred.data = {}
+        # reset hover when clear
+        hover_pred.renderers = []
+        hover_pred.tooltips  = [("t", "@t{0.000}")]
         p_pred.title.text = "Future Trajectory Prediction"
         status_div.text = ""
         # Re-fill IC with the selected model's stored initial condition
