@@ -841,10 +841,11 @@ def train_tab_layout(engine, trained_model_storage):
         column(file_select, file_input, train_s, split_select, library_select,
                poly_s, thr_s, thr_input, row(btn_train, btn_delete), width=320),
         column(p, 
+               view_div,
                # the row below is to align: "center", but since bokeh doesnt have that css style, so we use Spacer instead
                row(Spacer(sizing_mode="stretch_width"), state_key_div, Spacer(sizing_mode="stretch_width"), sizing_mode="stretch_width"),
                row(Spacer(sizing_mode="stretch_width"), row(state_toggle, layer_toggle), Spacer(sizing_mode="stretch_width"), sizing_mode="stretch_width"),
-               view_div, sizing_mode="stretch_width"),
+                sizing_mode="stretch_width"),
         sizing_mode="stretch_width"
     )
 

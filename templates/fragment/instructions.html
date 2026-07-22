@@ -307,17 +307,145 @@
     </section>
 
     <!-- =====================================================================
-         TEST SUB-TAB — placeholder, to be written next pass
-         (content plan: model selection -> test data source -> run & read
-         results -> why test differs from train, mapped from test_tab.py)
+         TEST SUB-TAB
+         Mirrors tabs/test_tab.py top-to-bottom: model + test-data selection
+         -> forward simulation via solve_ivp -> results table -> failure
+         handling. Answers a question the Train tab's dX/dt loss cannot:
+         does the discovered ODE actually generalize when integrated from
+         a fresh initial condition?
     ====================================================================== -->
     <section class="subtab-panel" data-panel="test" hidden>
-        <div class="doc-section-intro">
-            <span class="eyebrow">Coming Next</span>
-            <h3 class="doc-title">Test Tab Instructions</h3>
-            <p class="placeholder-text">This section is being written next — it will cover model selection,
-                out-of-sample test data, forward simulation, and how to read the RMSE / \( R^2 \) results table.</p>
+
+        <!-- ---- Phase 1: Model & test data selection ---- -->
+        <div class="doc-row">
+            <div class="doc-row-text">
+                <span class="eyebrow">Model &amp; Test Data</span>
+                <h3 class="doc-title">Choosing What To Test</h3>
+                <p>Start from the <b>Select Model</b> dropdown — it lists every run you've trained on the Train tab,
+                    labeled <code>Run #N</code>. Picking one loads a snapshot of that run's discovered equations, not a
+                    live reference back to the Train tab.</p>
+                <p>For the bundled pre-set systems, the tab automatically fills in a matching pair of held-out test CSVs
+                    — trajectories generated from different initial conditions than the training file, so the check is
+                    genuinely out-of-sample. If the selected run was trained on a custom-uploaded dataset, the CSV
+                    dropdowns are swapped for two upload fields instead.</p>
+                <p class="note note-tip">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M9 18h6M10 21h4" />
+                        <path
+                            d="M12 3a6 6 0 0 0-3.5 10.9c.6.44 1 .96 1 1.6V16h5v-.5c0-.64.4-1.16 1-1.6A6 6 0 0 0 12 3z" />
+                    </svg>
+                    <span><b>Tip.</b> Test Run 2 is optional — leave the second dropdown on <i>(none)</i>, or skip the
+                        second upload, to test with a single trajectory.</span>
+                </p>
+            </div>
+            <div class="doc-row-media">
+                <div class="doc-frame">
+                    <img src="{{ url_for('static', filename='images/test_modelselect.png') }}"
+                        alt="Model and test data selectors" class="doc-frame-img">
+                </div>
+                <p class="doc-img-caption">Model dropdown plus the two test-run file selectors.</p>
+            </div>
         </div>
+
+        <hr class="doc-divider">
+
+        <!-- ---- Phase 2: Forward simulation ---- -->
+        <div class="doc-section-intro">
+            <span class="eyebrow">Running The Test</span>
+            <h3 class="doc-title">Forward Simulation, Not Point Evaluation</h3>
+        </div>
+
+        <div class="doc-row">
+            <div class="doc-row-text">
+                <p>The Train tab's \( R^2 \) is computed pointwise on \( \dot{X} \) — it never checks whether the
+                    equations stay stable when actually run forward. This tab does: pressing <b>TEST</b> takes the
+                    discovered ODE system and numerically integrates it with SciPy's <code>solve_ivp</code> (RK45),
+                    starting <i>only</i> from the test file's initial condition \( x(0) \) and stepping forward across
+                    its full time span. Any error in the discovered coefficients compounds over time exactly the way it
+                    would in a real deployment — which is why a model with a great training \( R^2 \) can still diverge
+                    badly here.</p>
+                <p>Each of up to two test trajectories gets its own overlay plot: the true, measured points as a
+                    scatter, and the SINDy-simulated trajectory as a solid line. A good model's line should track
+                    directly through the scatter for the full duration; a line that peels away partway through is a sign
+                    of instability or a missing term, not just noise.</p>
+            </div>
+            <div class="doc-row-media">
+                <div class="doc-frame">
+                    <img src="{{ url_for('static', filename='images/test_overlay.png') }}"
+                        alt="True vs. SINDy-simulated overlay plot" class="doc-frame-img">
+                </div>
+                <p class="doc-img-caption">Overlay plot — dots are measured data, the line is the forward-simulated
+                    trajectory.</p>
+            </div>
+        </div>
+
+        <hr class="doc-divider">
+
+        <!-- ---- Phase 3: Results table ---- -->
+        <div class="doc-section-intro">
+            <span class="eyebrow">Test Results</span>
+            <h3 class="doc-title">Reading The Metrics Table</h3>
+            <p>Every completed test run appends its per-variable metrics below the plots — Run 1 and Run 2 (if used)
+                both land in the same table, so they're easy to compare side by side.</p>
+        </div>
+        <table class="doc-table">
+            <thead>
+                <tr>
+                    <th>Column</th>
+                    <th>Meaning</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Test Run</td>
+                    <td>Which of the two test trajectories (Run 1 / Run 2) this row belongs to.</td>
+                </tr>
+                <tr>
+                    <td>Model</td>
+                    <td>Which trained run (e.g. <code>#3</code>) produced the equations being tested.</td>
+                </tr>
+                <tr>
+                    <td>Var</td>
+                    <td>The state variable this row's metrics apply to.</td>
+                </tr>
+                <tr>
+                    <td>RMSE</td>
+                    <td>Root-mean-square error between the true and simulated trajectory, in \( x(t) \) space —
+                        comparable across runs on the same system.</td>
+                </tr>
+                <tr>
+                    <td>R&sup2;</td>
+                    <td>Fraction of trajectory variance explained by the simulation. Unlike the Train tab, this is
+                        computed on the integrated path, so it directly reflects long-horizon stability.</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <hr class="doc-divider">
+
+        <!-- ---- Phase 4: Failure handling ---- -->
+        <div class="doc-row">
+            <div class="doc-row-text">
+                <span class="eyebrow">When Something Goes Wrong</span>
+                <h3 class="doc-title">Reading a Failed Run</h3>
+                <p>Every test run is validated before it's simulated, so failures come back as a plain-language message
+                    above the TEST button instead of a crash: a mismatched number of state variables between the test
+                    file and the trained model, missing/NaN or infinite values in the CSV, or <code>solve_ivp</code>
+                    failing to converge on a genuinely unstable system all produce their own specific error.</p>
+                <p>A successful run replaces that message with a green confirmation instead — if you don't see it,
+                    nothing was plotted yet.</p>
+                <p class="note note-alert">
+                    <svg viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="8" x2="12" y2="12" />
+                        <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                    <span><b>Note.</b> A variable-count mismatch usually means the test CSV's columns don't line up with
+                        the columns the model was trained on — check the state variable order first.</span>
+                </p>
+            </div>
+        </div>
+
     </section>
 
     <!-- =====================================================================
