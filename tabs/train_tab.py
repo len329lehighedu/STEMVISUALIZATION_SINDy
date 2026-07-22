@@ -64,8 +64,9 @@ def train_tab_layout(engine, trained_model_storage):
         upload_status.text = f"{prefix_msg}<br><b>Suggestion:</b> {reason}"
 
     # =========================================================================
-    # SECTION 2 — DATA SOURCE SELECTION
+    # SECTION 1 — DATA SOURCE SELECTION
     # Dropdown for pre-set systems + custom CSV upload widget.
+    # 2 pre-set systems for users to test SINDy's ability
     # =========================================================================
 
     system_options = [
@@ -83,6 +84,7 @@ def train_tab_layout(engine, trained_model_storage):
 
     # File upload widget — hidden until the user picks "Upload your own data".
     file_input = FileInput(accept=".csv", visible=False)
+    # upload_status currently not used
     upload_status = Div(
         text="", styles={'color': "#247008", 'font-size': '13px'})
     # caches the last base64 payload (currently informational)
@@ -130,18 +132,17 @@ def train_tab_layout(engine, trained_model_storage):
     file_input.on_change('value', upload_to_local_drive)
 
     # =========================================================================
-    # SECTION 3 — MODEL CONFIGURATION CONTROLS
-    # Library type, train/validation split, polynomial degree, sparsity
-    # threshold, and the Train button.
+    # SECTION 2 — MODEL CONFIGURATION CONTROLS
+    # Train/validation split, Split type, Library type, polynomial degree, sparsity
+    # threshold, and the Train/Delete button.
     # =========================================================================
 
+    # Library select 
     library_select = Select(title="LIBRARY",
                             options=["Polynomial", "Fourier", "Combined"],
                             value="Polynomial")
 
     # Single slider controls the split; validation % is always 100 - train%.
-    # (This UX choice avoids the earlier bug where two independent sliders
-    # could be set to sum to less/more than 100%.)
     train_s = Slider(start=10, end=90, value=60, step=5,
                      title="Train/Validation Split")
 
@@ -153,8 +154,10 @@ def train_tab_layout(engine, trained_model_storage):
     # Initialize title immediately
     on_train_s_change(None, None, train_s.value)
     train_s.show_value = False
+    
+    # Split type select
     split_select = Select(
-        title="SPLIT TYPE",
+        title="SPLIT STRATEGY",
         value="Random Sampling",
         options=[
             "Random Sampling",
@@ -164,8 +167,10 @@ def train_tab_layout(engine, trained_model_storage):
         width=150,
     )
 
+    # Degree/Harmonics slider
     poly_s = Slider(start=1, end=5,     value=1,
                     step=1,     title="DEGREE / HARMONICS")
+    # Sparsity Threshold slider
     thr_s = Slider(start=0.0, end=0.5, value=0.1,
                    step=0.005, title="SPARSITY THRESHOLD")
     # ── Manual threshold input ──────────────────────────────────────────
@@ -210,12 +215,14 @@ def train_tab_layout(engine, trained_model_storage):
 
     thr_s.on_change('value', on_thr_slider_change)
     thr_input.on_change('value', on_thr_input_change)
+    
+    # Train button
     btn_train = Button(label="TRAIN", button_type="primary",
                        height=50, width=100)
 
     # =========================================================================
-    # SECTION 4 — HISTORY TABLE (LEADERBOARD)
-    # Stores one row per training run with all validation metrics and the
+    # SECTION 3 — HISTORY TABLE (LEADERBOARD)
+    # Stores one row per training run with all metrics and the
     # discovered equations. Selecting a row re-renders that run's plots.
     # =========================================================================
 
@@ -260,7 +267,7 @@ def train_tab_layout(engine, trained_model_storage):
     # stacked) instead of 6 separate wide numeric columns.
     columns = [
         TableColumn(field="run",    title="Run #",      width=100),
-        TableColumn(field="system", title="Data File",  width=300),
+        TableColumn(field="system", title="Data File",  width=400),
         TableColumn(field="split",  title="Split Type", width=300),
         TableColumn(field="lib",    title="Library",    width=200),
         TableColumn(field="poly",   title="Degree",     width=200),
@@ -278,9 +285,10 @@ def train_tab_layout(engine, trained_model_storage):
         source=source_history, columns=columns,
         width=1400, height=400, row_height=200,
         index_position=None, background="#ffffff",
-        sortable=True, selectable=True,
+        sortable=True, selectable=True
     )
 
+    # Delete button
     btn_delete = Button(label="DELETE",
                         button_type="danger", width=100, height=50)
     btn_delete.disabled = True  # default disable when there is no run
@@ -306,11 +314,12 @@ def train_tab_layout(engine, trained_model_storage):
     source_history.selected.on_change('indices', on_row_select)
 
     # =========================================================================
-    # SECTION 5 — MAIN RESULT PLOT
+    # SECTION 4 — MAIN RESULT PLOT
     # Shows train/validation points scattered against the SINDy-simulated
     # trajectory for the currently-viewed run.
     # =========================================================================
 
+    # Main plot
     p = figure(title="Model Result", height=430, sizing_mode="stretch_width")
     # Empty invisible glyph forces Bokeh to allocate a renderer/legend slot
     # immediately, avoiding a "plot has zero renderers" warning on first load.
@@ -349,7 +358,8 @@ def train_tab_layout(engine, trained_model_storage):
 
         for i, rends in _main_renderers.items():
             state_on = i in active_states
-
+            
+            # Currently hide, if want to fade change 0 to 0.02
             train_alpha = 0.35 if (state_on and data_on) else 0
             val_alpha = 0.55 if (state_on and data_on) else 0
             fit_alpha = 1.0 if (state_on and fit_on) else 0
@@ -364,6 +374,10 @@ def train_tab_layout(engine, trained_model_storage):
     state_toggle.on_change('active', _update_main_visibility)
     layer_toggle.on_change('active', _update_main_visibility)
 
+    # This div is currently not used.
+    # Previously, this div is to return equation found by SINDy, otherwise return a error message
+    # Since equation is displayed in the leaderboard, I made a new user_warning_div below serving as
+    # a status update: train complete / warning message
     res_div = Div(
         text="<h3>Run Equations:</h3>",
         styles={'background': '#f8f9fa',
@@ -371,7 +385,7 @@ def train_tab_layout(engine, trained_model_storage):
     )
 
     # =========================================================================
-    # SECTION 6 — RESIDUAL DIAGNOSTIC PLOTS
+    # SECTION 5 — RESIDUAL DIAGNOSTIC PLOTS
     # Three complementary views of model quality on the derivative (dX/dt)
     # space, used to spot missing library terms or structured (non-random)
     # error that a single R²/RMSE number would hide.
@@ -427,6 +441,8 @@ def train_tab_layout(engine, trained_model_storage):
     counter = [0]   # run counter — monotonically increasing, never reset
     # even after deletions (see project history: run IDs
     # are intentionally permanent to avoid ambiguity).
+    
+    # This is the user_warning_div that I talked about just above section 5
     user_warning_div = Div(
         text="",
         styles={'color': '#7f8c8d', 'font-size': '13px', 'padding': '4px 0'}
@@ -640,7 +656,7 @@ def train_tab_layout(engine, trained_model_storage):
         diag_stats_div.text = stats_html
 
     # =========================================================================
-    # SECTION 7 — TRAIN CALLBACK
+    # SECTION 6 — TRAIN CALLBACK
     # Main entry point triggered by the "TRAIN" button. Loads data (pre-set
     # or uploaded), fits SINDy on a random split, computes diagnostics,
     # updates the leaderboard, and re-renders all plots.
@@ -844,6 +860,7 @@ def train_tab_layout(engine, trained_model_storage):
     # ── Run the AI Suggester once on page load for the default pre-set
     #     system, so the sliders aren't left at arbitrary defaults before
     #     the user has interacted with anything. ──────────────────────────
+    # div apply_suggestion is currently not used, but still suggest hyperparameter when choose data file.
     initial_path = os.path.join('data', file_select.value)
     if os.path.exists(initial_path):
         try:
@@ -856,7 +873,7 @@ def train_tab_layout(engine, trained_model_storage):
     btn_train.on_click(on_train_click)
 
     # =========================================================================
-    # SECTION 8 — LAYOUT ASSEMBLY
+    # SECTION 7 — LAYOUT ASSEMBLY
     # =========================================================================
 
     top_row = row(
