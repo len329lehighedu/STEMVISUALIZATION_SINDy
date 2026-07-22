@@ -355,7 +355,8 @@ def train_tab_layout(engine, trained_model_storage):
         labels=[], active=[], button_type="default")
     layer_toggle = CheckboxButtonGroup(
         labels=["Data points", "SINDy fit"], active=[0, 1], button_type="default")
-
+    
+    
     # Static color key (state name -> color) since state_toggle button labels
     # are plain text and can't carry per-button color — this Div is the visual
     # reference, the buttons next to it are what actually drive visibility.
