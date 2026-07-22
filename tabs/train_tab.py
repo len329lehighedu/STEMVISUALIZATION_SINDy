@@ -386,6 +386,8 @@ def train_tab_layout(engine, trained_model_storage):
             rends['val'].glyph.line_alpha = val_alpha
             if rends['fit'] is not None:
                 rends['fit'].glyph.line_alpha = fit_alpha
+                # visible = False for havertool to not hit-test the fit-line that is turned off by user on UI
+                rends['fit'].visible = bool(state_on and fit_on)
 
     state_toggle.on_change('active', _update_main_visibility)
     layer_toggle.on_change('active', _update_main_visibility)
@@ -509,8 +511,10 @@ def train_tab_layout(engine, trained_model_storage):
                               color="#ff7f0e", alpha=0.55, size=4, legend_label="Val points")
             r_fit = None
             if x_sim_full is not None:
-                r_fit = p.line(t, x_sim_full[:, i],
-                               color=color, line_width=2.8)
+                # separate source for each fit-line, field: 't','y', 'name'
+                # for hovertool to display the right state name and value
+                fit_source = ColumnDataSource(data=dict(t=t, y=x_sim_full[:,i], name=[label]*len(t)))
+                r_fit = p.line('t', 'y', source=fit_source, color=color, line_width=2.8)
 
             _main_renderers[i] = {'train': r_train, 'val': r_val, 'fit': r_fit}
             color_key_parts.append(
@@ -524,6 +528,11 @@ def train_tab_layout(engine, trained_model_storage):
             "<div style='font-size:14px;'>" +
             "&nbsp;&nbsp;".join(color_key_parts) + "</div>"
         )
+        
+        # update renderers for fit_hover, since the loop above just render new fit-line for each of the states
+        fit_hover.renderers = [
+            rends['fit'] for rends in _main_renderers.values() if rends['fit'] is not None
+        ]
 
         # Re-sync the two toggle groups to this run: fresh labels, everything
         # visible by default.
