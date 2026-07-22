@@ -17,7 +17,7 @@
 # =============================================================================
 
 from bokeh.models import (ColumnDataSource, Slider, Div, Button,
-                          Select, DataTable, TableColumn, HTMLTemplateFormatter, FileInput, TextInput, CheckboxButtonGroup)
+                          Select, DataTable, TableColumn, HTMLTemplateFormatter, FileInput, TextInput, CheckboxButtonGroup, HoverTool)
 from bokeh.layouts import column, row, Spacer
 from bokeh.plotting import figure
 import pandas as pd
@@ -325,6 +325,22 @@ def train_tab_layout(engine, trained_model_storage):
     # immediately, avoiding a "plot has zero renderers" warning on first load.
     p.scatter([], [], alpha=0)
     p.legend.click_policy = "hide"
+    
+    # Hovertool only applies to SINDy fit line, not for train/validation points
+    # mode:
+    # vline: whenever a vertical line from the mouse position intersects a glyph
+    # hline: whenever a horizontal line from the mouse position intersects a glyph
+    # mouse: only when the mouse is directly over a glyph
+    # currently set vline to compare position accross all the states
+    fit_hover = HoverTool(
+        renderers=[], # default: no SINDy fit line has been drawn, when call render_plot() will be modified
+        mode="vline",
+        tooltips=[
+            ("Variable", "@name"),
+            ("t", "@t{0.000}"),
+            ("Value", "@y{0.0000}"),],
+    )
+    p.add_tools(fit_hover)
 
     # Storage for main-plot renderers, keyed by state index, so the toggle
     # callbacks below can reach in and adjust alpha per (state, role) pair.
