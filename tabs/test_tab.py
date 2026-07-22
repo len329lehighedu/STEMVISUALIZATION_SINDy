@@ -24,7 +24,7 @@
 #      trajectory (RMSE / R² per state variable + overlay plot).
 # =============================================================================
 
-from bokeh.models import ColumnDataSource, Button, Select, Div, DataTable, TableColumn, FileInput
+from bokeh.models import ColumnDataSource, Button, Select, Div, DataTable, TableColumn, FileInput, HoverTool
 from bokeh.layouts import column, row
 from bokeh.plotting import figure
 from bokeh.palettes import Category10
@@ -67,15 +67,19 @@ def test_tab_layout(engine, trained_model_storage):
 
     csv_files = [f for f in os.listdir('data') if f.endswith('.csv')]
 
-    model_select  = Select(title="SELECT MODEL (FROM HISTORY)", options=[], value="")
-    file_select_1 = Select(title="Test Run 1 — CSV File", options=csv_files, value="")
+    model_select = Select(
+        title="SELECT MODEL (FROM HISTORY)", options=[], value="")
+    file_select_1 = Select(title="Test Run 1 — CSV File",
+                           options=csv_files, value="")
     file_select_2 = Select(title="Test Run 2 — CSV File (optional)",
                            options=["(none)"] + csv_files, value="(none)")
 
     # Upload widgets — only shown when the selected model was trained on a
     # custom-uploaded dataset (no matching pre-set test files exist for it).
-    file_input_test1 = FileInput(accept=".csv", title="Upload Test Data 1", visible=False)
-    file_input_test2 = FileInput(accept=".csv", title="Upload Test Data 2", visible=False)
+    file_input_test1 = FileInput(
+        accept=".csv", title="Upload Test Data 1", visible=False)
+    file_input_test2 = FileInput(
+        accept=".csv", title="Upload Test Data 2", visible=False)
 
     # ── In-memory upload buffer ──────────────────────────────────────────
     # Bokeh's FileInput.value only fires a change event; it does NOT persist
@@ -125,13 +129,13 @@ def test_tab_layout(engine, trained_model_storage):
         if not new:
             return
         try:
-            run_id     = int(new.replace("Run #", ""))
+            run_id = int(new.replace("Run #", ""))
             train_file = trained_model_storage[run_id].get('system_name', '')
-            is_custom  = "custom" in train_file or train_file == "custom_upload"
+            is_custom = "custom" in train_file or train_file == "custom_upload"
 
             # Toggle visibility: pre-set dropdowns XOR custom upload widgets.
-            file_select_1.visible    = not is_custom
-            file_select_2.visible    = not is_custom
+            file_select_1.visible = not is_custom
+            file_select_2.visible = not is_custom
             file_input_test1.visible = is_custom
             file_input_test2.visible = is_custom
 
@@ -150,8 +154,8 @@ def test_tab_layout(engine, trained_model_storage):
 
     model_select.on_change('value', update_ui_on_model_select)
 
-    btn_test = Button(label="TEST", button_type="primary", height=50, width=100)
-
+    btn_test = Button(label="TEST", button_type="primary",
+                      height=50, width=100)
 
     # =========================================================================
     # SECTION 2 — FILE UPLOAD HANDLING
@@ -176,7 +180,6 @@ def test_tab_layout(engine, trained_model_storage):
     file_input_test1.on_change('value', on_upload_test1)
     file_input_test2.on_change('value', on_upload_test2)
 
-
     # =========================================================================
     # SECTION 3 — RESULTS DISPLAY (Metrics Table & Plots)
     # Per-variable RMSE/R² table plus one overlay plot (true vs SINDy) for
@@ -189,17 +192,34 @@ def test_tab_layout(engine, trained_model_storage):
     metrics_table = DataTable(source=source_metrics, columns=[
         TableColumn(field="run",       title="Test Run", width=100),
         TableColumn(field="model_run", title="Model",    width=100),
-        TableColumn(field="variable",  title="Var",      width=100),
-        TableColumn(field="rmse",      title="RMSE",     width=120),
+        TableColumn(field="variable",  title="Variable",      width=100),
+        TableColumn(field="rmse",      title="RMSE on x(t)",     width=120),
         TableColumn(field="r2",        title="R²",       width=120),
     ], sizing_mode="stretch_width", height=300)
 
     # p2 starts invisible — only shown once Test Run 2 actually produces
     # results, so an unused second plot doesn't clutter the layout.
     p1 = figure(title="Test Run 1", width=900, height=350,
-               x_axis_label="Time (s)", sizing_mode="stretch_width")
+                x_axis_label="Time (s)", sizing_mode="stretch_width")
     p2 = figure(title="Test Run 2", width=900, height=350,
-               x_axis_label="Time (s)", visible=False, sizing_mode="stretch_width")
+                x_axis_label="Time (s)", visible=False, sizing_mode="stretch_width")
+
+    # Hover for each plot, view on SINDy line mode='vline' 
+    # view 3 stats at once: sindy, true, and diff = true - sindy for all the states
+    _test_tooltips = [
+        ("Variable", "@name"),
+        ("t", "@t{0.000}"),
+        ("True", "@true{0.0000}"),
+        ("SINDy", "@pred{0.0000}"),
+        ("Diff", "@diff{0.0000}"),
+    ]
+    hover_p1 = HoverTool(renderers=[], mode='vline', tooltips=_test_tooltips)
+    hover_p2 = HoverTool(renderers=[], mode='vline', tooltips=_test_tooltips)
+    p1.add_tools(hover_p1)
+    p2.add_tools(hover_p2)
+    # {fig.id: hover_tool} — để _run_single_test tra ra đúng hover tool
+    # ứng với plot (p1 hoặc p2) mà nó đang vẽ, mà không cần đổi chữ ký hàm.
+    _hover_by_fig = {p1: hover_p1, p2: hover_p2}
 
     # ── ROBUSTNESS FIX ──────────────────────────────────────────────────
     # Category10[10] only has 10 distinct colors. The original indexing
@@ -210,7 +230,6 @@ def test_tab_layout(engine, trained_model_storage):
     # palette cycles instead of crashing on systems with more variables
     # (e.g. a 3-mass coupled system has 6 states: x1,v1,x2,v2,x3,v3).
     _TEST_COLORS = Category10[10]
-
 
     # =========================================================================
     # SECTION 4 — DATA LOADING HELPERS
@@ -264,7 +283,6 @@ def test_tab_layout(engine, trained_model_storage):
         if err:
             return None, err
         return df, None
-
 
     # =========================================================================
     # SECTION 5 — CORE TEST RUNNER
@@ -332,7 +350,8 @@ def test_tab_layout(engine, trained_model_storage):
         # taking down the whole Test tab. We wrap the call so any failure
         # becomes a normal, user-visible error message instead.
         try:
-            sol = solve_ivp(rhs, (t[0], t[-1]), X[0, :], t_eval=t, method='RK45')
+            sol = solve_ivp(rhs, (t[0], t[-1]), X[0, :],
+                            t_eval=t, method='RK45')
         except Exception as e:
             return None, f"Simulation failed: {e}"
 
@@ -345,23 +364,36 @@ def test_tab_layout(engine, trained_model_storage):
             fig.legend.items = []
 
         rows = []
+        pred_renderers = [] # to set to hover_p1/hover_p2 after the loop
         for i, vname in enumerate(df.columns[1:]):
             # ── ROBUSTNESS FIX ──
             # Wrap indices with modulo so the palette cycles instead of
             # raising IndexError for systems with more than 5 variables.
-            c_true = _TEST_COLORS[(i * 2)     % len(_TEST_COLORS)]
+            c_true = _TEST_COLORS[(i * 2) % len(_TEST_COLORS)]
             c_pred = _TEST_COLORS[(i * 2 + 1) % len(_TEST_COLORS)]
 
+            diff = X[:, i] - sol.y[i] # diff = true - sindy
+            # Source enough field for HoverTool: t, true, pred, diff, name.
+            var_source = ColumnDataSource(data=dict(
+                t=t, true=X[:, i], pred=sol.y[i], diff=diff,
+                name=[vname] * len(t)
+            ))
+ 
             # True (measured) trajectory as scattered points.
-            fig.scatter(t, X[:, i], color=c_true, alpha=0.3, legend_label=f"{vname} (True)")
-            # SINDy-simulated trajectory as a solid line.
-            fig.line(   t, sol.y[i], color=c_pred, line_width=2, legend_label=f"{vname} (SINDy)")
+            fig.scatter('t', 'true', source=var_source, color=c_true,
+                       alpha=0.3, legend_label=f"{vname} (True)")
+            # SINDy-simulated trajectory as a solid line — this is the
+            # renderer the hover tool attaches to.
+            r_pred = fig.line('t', 'pred', source=var_source, color=c_pred,
+                             line_width=2, legend_label=f"{vname} (SINDy)")
+            pred_renderers.append(r_pred)
 
-            res = X[:, i] - sol.y[i]
+            res = X[:, i] - sol.y[i] # X[:,i] = x(t) from test data, sol.y[i] = x(t) from forward-integrate
             ss_tot = np.sum((X[:, i] - np.mean(X[:, i])) ** 2)
             # Guard against a degenerate constant true-trajectory (ss_tot=0),
             # which would otherwise produce a division-by-zero R² of inf/NaN.
-            r2 = 1 - (np.sum(res ** 2) / ss_tot) if ss_tot > 0 else float('nan')
+            r2 = 1 - (np.sum(res ** 2) /
+                      ss_tot) if ss_tot > 0 else float('nan')
             rows.append({
                 'variable': vname,
                 'rmse':     f"{np.sqrt(np.mean(res ** 2)):.6f}",
@@ -369,9 +401,17 @@ def test_tab_layout(engine, trained_model_storage):
             })
 
         fig.legend.click_policy = "hide"
-        fig.legend.location     = "top_right"
+        fig.legend.location = "top_right"
+        
+        
+        # update hover tool of this fig to point to the corresponding SINDy-line
+        # avoid pointing to the wrong sindy line.
+        hover_tool = _hover_by_fig.get(fig)
+        if hover_tool is not None:
+            hover_tool.renderers = pred_renderers
+        
+        
         return rows, None
-
 
     # =========================================================================
     # SECTION 6 — RUN TEST CALLBACK
@@ -406,8 +446,9 @@ def test_tab_layout(engine, trained_model_storage):
         model_instance = model_data['model_instance']
 
         run_id_str = f"#{run_id}"
-        res_data   = {'run': [], 'model_run': [], 'variable': [], 'rmse': [], 'r2': []}
-        messages   = []  # collects per-run error/success text for status_div
+        res_data = {'run': [], 'model_run': [],
+                    'variable': [], 'rmse': [], 'r2': []}
+        messages = []  # collects per-run error/success text for status_div
 
         # ── Test Run 1 (required) ───────────────────────────────────────
         is_custom = file_input_test1.visible
@@ -463,12 +504,12 @@ def test_tab_layout(engine, trained_model_storage):
 
         # ── Build the final status message ───────────────────────────────
         if messages:
-            status_div.text = "<b style='color:red;'>" + "<br>".join(messages) + "</b>"
+            status_div.text = "<b style='color:red;'>" + \
+                "<br>".join(messages) + "</b>"
         else:
             status_div.text = "<b style='color:#27ae60;'>✅ Test complete!</b>"
 
     btn_test.on_click(on_test_click)
-
 
     # =========================================================================
     # SECTION 7 — EXTERNAL HOOK (called by main.py on tab switch)
@@ -494,7 +535,6 @@ def test_tab_layout(engine, trained_model_storage):
         file_select_1.options = f_list
         file_select_2.options = ["(none)"] + f_list
 
-
     # =========================================================================
     # SECTION 8 — LAYOUT ASSEMBLY
     # =========================================================================
@@ -502,7 +542,7 @@ def test_tab_layout(engine, trained_model_storage):
     layout = column(
         Div(text="<h3>🧪 Test Evaluation</h3>"),
         row(
-            column(model_select,status_div, btn_test),
+            column(model_select, status_div, btn_test),
             column(file_select_1, file_input_test1),
             column(file_select_2, file_input_test2),
         ),
