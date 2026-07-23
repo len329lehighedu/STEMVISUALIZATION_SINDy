@@ -181,7 +181,8 @@ def predict_tab_layout(engine, trained_model_storage):
         hover_pred.tooltips = [("t", "@t{0.000}")] + [
             (name, f"@{{{name}}}{{0.0000}}") for name in var_names
         ]
-        hover_pred.renderers = list(renderers.values())
+        first_renderer = next(iter(renderers.values()), None)
+        hover_pred.renderers = [first_renderer] if first_renderer is not None else []
         
         p_pred.title.text = (
             f"Future Trajectory — Run #{run_id} | "
