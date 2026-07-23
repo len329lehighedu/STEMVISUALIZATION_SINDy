@@ -1,0 +1,7 @@
+flask
+bokeh
+pysindy
+scipy
+pandas
+numpy
+scikit-learn
