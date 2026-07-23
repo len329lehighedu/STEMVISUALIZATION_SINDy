@@ -199,7 +199,7 @@ def test_tab_layout(engine, trained_model_storage):
         TableColumn(field="variable",  title="Variable",      width=100),
         TableColumn(field="rmse",      title="RMSE on x(t)",     width=120),
         TableColumn(field="r2",        title="R²",       width=120),
-    ], sizing_mode="stretch_width", height=300)
+    ], sizing_mode="stretch_width", height=270)
 
     # p2 starts invisible — only shown once Test Run 2 actually produces
     # results, so an unused second plot doesn't clutter the layout.
