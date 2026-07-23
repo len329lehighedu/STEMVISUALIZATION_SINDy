@@ -1,0 +1,55 @@
+# render.yaml — Render Blueprint
+#
+# Defines both services needed for the SINDy Expert System:
+#   1. sindy-bokeh  — the Bokeh server (main.py), does the actual SINDy
+#      computation and serves interactive widgets over WebSocket.
+#   2. sindy-flask  — the Flask frontend (flask_app.py), serves the
+#      HTML pages (storyline/about/instructions/questions) and embeds
+#      the Bokeh app via server_document().
+#
+# IMPORTANT — service name / URL chicken-and-egg problem:
+# Render service names must be GLOBALLY unique across all Render users,
+# so "sindy-bokeh" / "sindy-flask" below may already be taken. If so,
+# Render will auto-suffix your service names (e.g. sindy-bokeh-ab12),
+# and you MUST update:
+#   - the --allow-websocket-origin value below to match your actual
+#     sindy-flask service's final .onrender.com domain
+#   - the BOKEH_URL env var below to match your actual sindy-bokeh
+#     service's final .onrender.com domain
+# after your first deploy, then redeploy both services once you know
+# their real URLs.
+#
+# Usage: In the Render Dashboard, choose "New > Blueprint" and point it
+# at this repository. Render will read this file and create both
+# services automatically.
+
+services:
+  # --------------------------------------------------------------------
+  # Bokeh backend — runs the SINDy engine and all 3 tabs.
+  # --------------------------------------------------------------------
+  - type: web
+    name: sindy-bokeh-leminhngo
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: >
+      bokeh serve main.py
+      --port $PORT
+      --address 0.0.0.0
+      --allow-websocket-origin=sindy-flask.onrender.com
+      --use-xheaders
+
+  # --------------------------------------------------------------------
+  # Flask frontend — serves the HTML pages and embeds the Bokeh app.
+  # --------------------------------------------------------------------
+  - type: web
+    name: sindy-flask-leminhngo
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn flask_app:app
+    envVars:
+      - key: BOKEH_URL
+        value: https://sindy-bokeh-leminhngo.onrender.com/main
+      - key: FLASK_DEBUG
+        value: "false"
