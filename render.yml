@@ -43,7 +43,7 @@ services:
   # Flask frontend — serves the HTML pages and embeds the Bokeh app.
   # --------------------------------------------------------------------
   - type: web
-    name: sindy-flask
+    name: sindy-flask-leminhngo
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
