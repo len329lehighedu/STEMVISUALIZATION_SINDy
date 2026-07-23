@@ -116,6 +116,10 @@ def test_tab_layout(engine, trained_model_storage):
             return ["cs_test_data_1.csv", "cs_test_data_2.csv"]
         if train_file == "vanderpol_train.csv":
             return ["vanderpol_test_1.csv", "vanderpol_test_2.csv"]
+        if train_file == "pendulum_train.csv":
+            return ["pendulum_test_1.csv", "pendulum_test_2.csv"]
+        if train_file == "timedep_train.csv":
+            return ["timedep_test_1.csv", "timedep_test_2.csv"]
         return ["", "(none)"]
 
     def update_ui_on_model_select(attr, old, new):

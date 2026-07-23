@@ -70,8 +70,10 @@ def train_tab_layout(engine, trained_model_storage):
     # =========================================================================
 
     system_options = [
-        ("cs_train_data.csv",   "Coupled Spring-Mass (Pre-set)"),
-        ("vanderpol_train.csv", "Van der Pol Oscillator (Pre-set)"),
+        ("cs_train_data.csv",   "Coupled Spring-Mass (Polynomial)"),
+        ("vanderpol_train.csv", "Van der Pol Oscillator (Polynomial)"),
+        ("pendulum_train.csv",  "Nonlinear Pendulum (Fourier/Combined)"),
+        ("timedep_train.csv",   "Forced Oscillator (Combined)"),
         ("custom_upload",       "Upload your own data")
     ]
 
