@@ -65,7 +65,7 @@ def train_tab_layout(engine, trained_model_storage):
             suggestion_div.text = ""
             upload_status.text = f"<span style='color:#e74c3c;'>⚠ {reason}</span>"
             return
-        
+
         poly_s.value = deg
         thr_s.value = thr
         if prefix_msg:
@@ -168,7 +168,7 @@ def train_tab_layout(engine, trained_model_storage):
     # threshold, and the Train/Delete button.
     # =========================================================================
 
-    # Library select 
+    # Library select
     library_select = Select(title="LIBRARY",
                             options=["Polynomial", "Fourier", "Combined"],
                             value="Polynomial")
@@ -185,7 +185,7 @@ def train_tab_layout(engine, trained_model_storage):
     # Initialize title immediately
     on_train_s_change(None, None, train_s.value)
     train_s.show_value = False
-    
+
     # Split type select
     split_select = Select(
         title="SPLIT STRATEGY",
@@ -246,7 +246,7 @@ def train_tab_layout(engine, trained_model_storage):
 
     thr_s.on_change('value', on_thr_slider_change)
     thr_input.on_change('value', on_thr_input_change)
-    
+
     # Train button
     btn_train = Button(label="TRAIN", button_type="primary",
                        height=50, width=100)
@@ -356,7 +356,7 @@ def train_tab_layout(engine, trained_model_storage):
     # immediately, avoiding a "plot has zero renderers" warning on first load.
     p.scatter([], [], alpha=0)
     p.legend.click_policy = "hide"
-    
+
     # Hovertool only applies to SINDy fit line, not for train/validation points
     # mode:
     # vline: whenever a vertical line from the mouse position intersects a glyph
@@ -364,7 +364,7 @@ def train_tab_layout(engine, trained_model_storage):
     # mouse: only when the mouse is directly over a glyph
     # currently set vline to compare position accross all the states
     fit_hover = HoverTool(
-        renderers=[], # default: no SINDy fit line has been drawn, when call render_plot() will be modified
+        renderers=[],  # default: no SINDy fit line has been drawn, when call render_plot() will be modified
         mode="vline",
         tooltips=[
             ("Variable", "@name"),
@@ -386,8 +386,7 @@ def train_tab_layout(engine, trained_model_storage):
         labels=[], active=[], button_type="default")
     layer_toggle = CheckboxButtonGroup(
         labels=["Data points", "SINDy fit"], active=[0, 1], button_type="default")
-    
-    
+
     # Static color key (state name -> color) since state_toggle button labels
     # are plain text and can't carry per-button color — this Div is the visual
     # reference, the buttons next to it are what actually drive visibility.
@@ -406,7 +405,7 @@ def train_tab_layout(engine, trained_model_storage):
 
         for i, rends in _main_renderers.items():
             state_on = i in active_states
-            
+
             # Currently hide, if want to fade change 0 to 0.02
             train_alpha = 0.35 if (state_on and data_on) else 0
             val_alpha = 0.55 if (state_on and data_on) else 0
@@ -423,16 +422,6 @@ def train_tab_layout(engine, trained_model_storage):
 
     state_toggle.on_change('active', _update_main_visibility)
     layer_toggle.on_change('active', _update_main_visibility)
-
-    # This div is currently not used.
-    # Previously, this div is to return equation found by SINDy, otherwise return a error message
-    # Since equation is displayed in the leaderboard, I made a new user_warning_div below serving as
-    # a status update: train complete / warning message
-    res_div = Div(
-        text="<h3>Run Equations:</h3>",
-        styles={'background': '#f8f9fa',
-                'padding': '10px', 'border-radius': '5px'}
-    )
 
     # =========================================================================
     # SECTION 5 — RESIDUAL DIAGNOSTIC PLOTS
@@ -491,7 +480,7 @@ def train_tab_layout(engine, trained_model_storage):
     counter = [0]   # run counter — monotonically increasing, never reset
     # even after deletions (see project history: run IDs
     # are intentionally permanent to avoid ambiguity).
-    
+
     # This is the user_warning_div that I talked about just above section 5
     user_warning_div = Div(
         text="",
@@ -501,13 +490,6 @@ def train_tab_layout(engine, trained_model_storage):
     # on_delete_click to decide whether to clear the plot, now that
     # user_warning_div's text no longer always contains "Run #{run_id}".
     _current_view_run = [None]
-    # Static role-legend — separate from Bokeh's interactive per-state legend.
-    # Needed because merging train/val/fit under one legend_label per state
-    # (for mute-by-variable) removes the old separate "Train points"/"Val
-    # points" entries, so marker-shape meaning must be spelled out explicitly
-    # somewhere the student can't miss — this is pedagogically load-bearing
-    # since the whole point of this plot is showing HOW the split partitions
-    # the data differently per split strategy.
 
     def render_plot(run_id):
         """
@@ -545,8 +527,10 @@ def train_tab_layout(engine, trained_model_storage):
             if x_sim_full is not None:
                 # separate source for each fit-line, field: 't','y', 'name'
                 # for hovertool to display the right state name and value
-                fit_source = ColumnDataSource(data=dict(t=t, y=x_sim_full[:,i], name=[label]*len(t)))
-                r_fit = p.line('t', 'y', source=fit_source, color=color, line_width=2.8)
+                fit_source = ColumnDataSource(
+                    data=dict(t=t, y=x_sim_full[:, i], name=[label]*len(t)))
+                r_fit = p.line('t', 'y', source=fit_source,
+                               color=color, line_width=2.8)
 
             _main_renderers[i] = {'train': r_train, 'val': r_val, 'fit': r_fit}
             color_key_parts.append(
@@ -560,7 +544,7 @@ def train_tab_layout(engine, trained_model_storage):
             "<div style='font-size:14px;'>" +
             "&nbsp;&nbsp;".join(color_key_parts) + "</div>"
         )
-        
+
         # update renderers for fit_hover, since the loop above just render new fit-line for each of the states
         fit_hover.renderers = [
             rends['fit'] for rends in _main_renderers.values() if rends['fit'] is not None
@@ -732,12 +716,12 @@ def train_tab_layout(engine, trained_model_storage):
         if is_custom:
             if not uploaded_value:
                 # Guard against pressing Train before a file was actually chosen.
-                res_div.text = "<span style='color:red;'>⚠ Please upload a CSV file first!</span>"
+                user_warning_div.text = "<span style='color:red;'>⚠ Please upload a CSV file first!</span>"
                 return
             # Check size of input file, >5MB -> file to large
             size_err = check_upload_size(uploaded_value)
             if size_err:
-                res_div.text = f"<span style='color:red;'>⚠ {size_err}</span>"
+                user_warning_div.text = f"<span style='color:red;'>⚠ {size_err}</span>"
                 return
             # Decode the uploaded CSV (base64 -> bytes -> DataFrame).
             decoded = base64.b64decode(file_input.value)
@@ -750,7 +734,7 @@ def train_tab_layout(engine, trained_model_storage):
             # Check data file format: time, state1, state2,... if missing states/NaN/infinite -> notify error to screen
             val_err = validate_dataframe(df)
             if val_err:
-                res_div.text = f"<span style='color:red;'>⚠ {val_err}</span>"
+                user_warning_div.text = f"<span style='color:red;'>⚠ {val_err}</span>"
                 return
         else:
             # Load one of the bundled pre-set system files.
@@ -791,7 +775,7 @@ def train_tab_layout(engine, trained_model_storage):
                     # keep the last warning message, as it's the most important
                     fit_warning_msg = str(caught[-1].message)
         except Exception as e:
-            res_div.text = f"<span style='color:red;'>⚠ Fit error: {e}</span>"
+            user_warning_div.text = f"<span style='color:red;'>⚠ Fit error: {e}</span>"
             return
 
         # ── 4. Compute residual diagnostics for the 3 diagnostic plots ──────
@@ -807,7 +791,7 @@ def train_tab_layout(engine, trained_model_storage):
         try:
             x_sim_full = engine.simulate(X[0], t)
         except Exception as e:
-            res_div.text = f"<span style='color:red;'>⚠ Simulation error: {e}</span>"
+            user_warning_div.text = f"<span style='color:red;'>⚠ Simulation error: {e}</span>"
             return
 
         # ── 6. Format the discovered equations for display ─────────────────
@@ -924,16 +908,19 @@ def train_tab_layout(engine, trained_model_storage):
 
     btn_delete.on_click(on_delete_click)
 
-    # ── Run the AI Suggester once on page load for the default pre-set
+    # ── Run the Suggester once on page load for the default pre-set
     #     system, so the sliders aren't left at arbitrary defaults before
     #     the user has interacted with anything. ──────────────────────────
-    # div apply_suggestion is currently not used, but still suggest hyperparameter when choose data file.
     initial_path = os.path.join('data', file_select.value)
     if os.path.exists(initial_path):
         try:
             df_init = pd.read_csv(initial_path).astype(np.float64)
-            apply_suggestion(
-                df_init, f"Loaded default pre-set system: {file_select.value}")
+            val_err = validate_dataframe(df_init)
+            if val_err:
+                upload_status.text = f"<span style='color:#e74c3c;'>⚠ {val_err}</span>"
+            else:
+                apply_suggestion(
+                    df_init, f"Loaded default pre-set system: {file_select.value}")
         except Exception:
             pass  # non-fatal — user can still configure manually
 
@@ -946,11 +933,13 @@ def train_tab_layout(engine, trained_model_storage):
     top_row = row(
         column(file_select, file_input, upload_status, suggestion_div, train_s, split_select, library_select,
                poly_s, thr_s, thr_input, row(btn_train, btn_delete), user_warning_div, width=320),
-        column(p, 
+        column(p,
                # the row below is to align: "center", but since bokeh doesnt have that css style, so we use Spacer instead
-               row(Spacer(sizing_mode="stretch_width"), state_key_div, Spacer(sizing_mode="stretch_width"), sizing_mode="stretch_width"),
-               row(Spacer(sizing_mode="stretch_width"), row(state_toggle, layer_toggle), Spacer(sizing_mode="stretch_width"), sizing_mode="stretch_width"),
-                sizing_mode="stretch_width"),
+               row(Spacer(sizing_mode="stretch_width"), state_key_div, Spacer(
+                   sizing_mode="stretch_width"), sizing_mode="stretch_width"),
+               row(Spacer(sizing_mode="stretch_width"), row(state_toggle, layer_toggle), Spacer(
+                   sizing_mode="stretch_width"), sizing_mode="stretch_width"),
+               sizing_mode="stretch_width"),
         sizing_mode="stretch_width"
     )
 
