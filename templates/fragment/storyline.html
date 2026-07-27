@@ -118,9 +118,6 @@
         </div>
         <div class="sd-proof-media">
             <div class="sd-browser-frame">
-                <!-- <div class="sd-browser-bar">
-                    <span class="sd-dot"></span><span class="sd-dot"></span><span class="sd-dot"></span>
-                </div> -->
                 <img src="{{ url_for('static', filename='images/train_newlayout.png') }}"
                     alt="Train tab showing SINDy fit against noisy trajectory data" class="sd-browser-img"
                     loading="lazy" width="1400" height="1061">
@@ -233,14 +230,6 @@
     }
 
     /* --- Pipeline diagram --- */
-    .sd-diagram-label {
-        font-size: 12px;
-        font-weight: 600;
-        color: #8a94a0;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        margin: 0 0 16px;
-    }
 
     .sd-pipeline-grid {
         display: grid;
@@ -272,20 +261,6 @@
         display: flex;
         align-items: center;
         justify-content: center;
-    }
-
-    .sd-node {
-        width: 100%;
-        padding: 14px 12px;
-        border-radius: 10px;
-        text-align: center;
-        background: #ffffff;
-        border: 1px solid #e2e6ea;
-    }
-
-    .sd-node-accent {
-        background: rgba(24, 51, 70, 0.05);
-        border-color: rgba(24, 51, 70, 0.18);
     }
 
     .sd-icon {
@@ -408,20 +383,6 @@
         border-radius: 10px;
         overflow: hidden;
         box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
-    }
-
-    .sd-browser-bar {
-        background: #eef0f2;
-        padding: 9px 12px;
-        display: flex;
-        gap: 6px;
-    }
-
-    .sd-dot {
-        width: 9px;
-        height: 9px;
-        border-radius: 50%;
-        background: #d3d7db;
     }
 
     .sd-browser-img {
