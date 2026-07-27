@@ -34,6 +34,7 @@ import os
 import base64
 import io
 from scipy.integrate import solve_ivp
+from engine.check_datafile import check_upload_size, validate_dataframe
 
 
 def test_tab_layout(engine, trained_model_storage):
@@ -208,7 +209,7 @@ def test_tab_layout(engine, trained_model_storage):
     p2 = figure(title="Test Run 2", width=900, height=350,
                 x_axis_label="Time (s)", visible=False, sizing_mode="stretch_width")
 
-    # Hover for each plot, view on SINDy line mode='vline' 
+    # Hover for each plot, view on SINDy line mode='vline'
     # view 3 stats at once: sindy, true, and diff = true - sindy for all the states
     _test_tooltips = [
         ("Variable", "@name"),
@@ -244,24 +245,6 @@ def test_tab_layout(engine, trained_model_storage):
     # propagating into solve_ivp and producing a cryptic numerical error.
     # =========================================================================
 
-    def _validate_dataframe(df):
-        """
-        Sanity-check a loaded test DataFrame.
-
-        ── ROBUSTNESS FIX ──
-        Previously, a CSV with missing values, non-numeric cells, or an
-        Inf value would pass silently through pd.read_csv().astype(float)
-        (NaN) or raise a confusing low-level error deep inside solve_ivp.
-        We now check explicitly and return a clear, user-facing message.
-        """
-        if df.shape[1] < 2:
-            return "CSV must have at least 2 columns: time + one state variable."
-        if df.isnull().values.any():
-            return "CSV contains missing/NaN values — please clean the data first."
-        if not np.isfinite(df.values).all():
-            return "CSV contains infinite values — please check the data."
-        return None
-
     def _load_df_from_select(sel_value):
         """Load a DataFrame from a pre-set CSV file living in data/."""
         path = os.path.join('data', sel_value)
@@ -271,19 +254,22 @@ def test_tab_layout(engine, trained_model_storage):
             df = pd.read_csv(path).astype(np.float64)
         except Exception as e:
             return None, f"Could not parse CSV: {e}"
-        err = _validate_dataframe(df)
+        err = validate_dataframe(df)
         if err:
             return None, err
         return df, None
 
     def _load_df_from_buffer(b64_data):
         """Decode a cached base64 upload payload into a DataFrame."""
+        err = check_upload_size(b64_data)
+        if err:
+            return None, err
         try:
             decoded = base64.b64decode(b64_data)
             df = pd.read_csv(io.BytesIO(decoded)).astype(np.float64)
         except Exception as e:
             return None, f"Could not parse uploaded CSV: {e}"
-        err = _validate_dataframe(df)
+        err = validate_dataframe(df)
         if err:
             return None, err
         return df, None
@@ -368,7 +354,7 @@ def test_tab_layout(engine, trained_model_storage):
             fig.legend.items = []
 
         rows = []
-        pred_renderers = [] # to set to hover_p1/hover_p2 after the loop
+        pred_renderers = []  # to set to hover_p1/hover_p2 after the loop
         for i, vname in enumerate(df.columns[1:]):
             # ── ROBUSTNESS FIX ──
             # Wrap indices with modulo so the palette cycles instead of
@@ -376,23 +362,24 @@ def test_tab_layout(engine, trained_model_storage):
             c_true = _TEST_COLORS[(i * 2) % len(_TEST_COLORS)]
             c_pred = _TEST_COLORS[(i * 2 + 1) % len(_TEST_COLORS)]
 
-            diff = X[:, i] - sol.y[i] # diff = true - sindy
+            diff = X[:, i] - sol.y[i]  # diff = true - sindy
             # Source enough field for HoverTool: t, true, pred, diff, name.
             var_source = ColumnDataSource(data=dict(
                 t=t, true=X[:, i], pred=sol.y[i], diff=diff,
                 name=[vname] * len(t)
             ))
- 
+
             # True (measured) trajectory as scattered points.
             fig.scatter('t', 'true', source=var_source, color=c_true,
-                       alpha=0.3, legend_label=f"{vname} (True)")
+                        alpha=0.3, legend_label=f"{vname} (True)")
             # SINDy-simulated trajectory as a solid line — this is the
             # renderer the hover tool attaches to.
             r_pred = fig.line('t', 'pred', source=var_source, color=c_pred,
-                             line_width=2, legend_label=f"{vname} (SINDy)")
+                              line_width=2, legend_label=f"{vname} (SINDy)")
             pred_renderers.append(r_pred)
 
-            res = X[:, i] - sol.y[i] # X[:,i] = x(t) from test data, sol.y[i] = x(t) from forward-integrate
+            # X[:,i] = x(t) from test data, sol.y[i] = x(t) from forward-integrate
+            res = X[:, i] - sol.y[i]
             ss_tot = np.sum((X[:, i] - np.mean(X[:, i])) ** 2)
             # Guard against a degenerate constant true-trajectory (ss_tot=0),
             # which would otherwise produce a division-by-zero R² of inf/NaN.
@@ -406,15 +393,13 @@ def test_tab_layout(engine, trained_model_storage):
 
         fig.legend.click_policy = "hide"
         fig.legend.location = "top_right"
-        
-        
+
         # update hover tool of this fig to point to the corresponding SINDy-line
         # avoid pointing to the wrong sindy line.
         hover_tool = _hover_by_fig.get(fig)
         if hover_tool is not None:
             hover_tool.renderers = pred_renderers
-        
-        
+
         return rows, None
 
     # =========================================================================

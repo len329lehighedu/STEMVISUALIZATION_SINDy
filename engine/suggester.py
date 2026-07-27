@@ -14,6 +14,7 @@ from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score
 
 
+
 def analyze_data_linearity(df):
     """
     Analyze an uploaded/selected dataset and suggest SINDy hyperparameters.

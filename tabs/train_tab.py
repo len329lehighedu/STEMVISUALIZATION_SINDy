@@ -28,6 +28,7 @@ import base64
 import io
 import warnings
 from engine.suggester import analyze_data_linearity
+from engine.check_datafile import check_upload_size, validate_dataframe
 
 
 def train_tab_layout(engine, trained_model_storage):
@@ -123,6 +124,10 @@ def train_tab_layout(engine, trained_model_storage):
         if not new:
             return
         _upload_buffer['data'] = new  # cache base64 payload
+        size_err = check_upload_size(new)
+        if size_err:
+            upload_status.text = f"<span style='color:red;'>⚠ {size_err}</span>"
+            return
         try:
             decoded = base64.b64decode(new)
             f = io.BytesIO(decoded)
@@ -705,6 +710,11 @@ def train_tab_layout(engine, trained_model_storage):
                 # Guard against pressing Train before a file was actually chosen.
                 res_div.text = "<span style='color:red;'>⚠ Please upload a CSV file first!</span>"
                 return
+            # Check size of input file, >5MB -> file to large
+            size_err = check_upload_size(uploaded_value)
+            if size_err:
+                res_div.text = f"<span style='color:red;'>⚠ {size_err}</span>"
+                return
             # Decode the uploaded CSV (base64 -> bytes -> DataFrame).
             decoded = base64.b64decode(file_input.value)
             f = io.BytesIO(decoded)
@@ -713,6 +723,11 @@ def train_tab_layout(engine, trained_model_storage):
             # fall back to a generic label so the leaderboard never shows blank.
             data_file_label = getattr(
                 file_input, 'filename', None) or "Custom Upload"
+            # Check data file format: time, state1, state2,... if missing states/NaN/infinite -> notify error to screen
+            val_err = validate_dataframe(df)
+            if val_err:
+                res_div.text = f"<span style='color:red;'>⚠ {val_err}</span>"
+                return
         else:
             # Load one of the bundled pre-set system files.
             path = os.path.join('data', file_select.value)
