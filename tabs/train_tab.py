@@ -60,9 +60,17 @@ def train_tab_layout(engine, trained_model_storage):
         see note in Step 6 above.)
         """
         lib, deg, thr, reason = analyze_data_linearity(df)
+        # detect suggester.py catch error --> empty suggester div, print out warning in upload_status
+        if reason.strip().lower().startswith("error"):
+            suggestion_div.text = ""
+            upload_status.text = f"<span style='color:#e74c3c;'>⚠ {reason}</span>"
+            return
+        
         poly_s.value = deg
         thr_s.value = thr
-        upload_status.text = f"{prefix_msg}<br><b>Suggestion:</b> {reason}"
+        if prefix_msg:
+            upload_status.text = prefix_msg
+        suggestion_div.text = f"Suggestion: {reason}"
 
     # =========================================================================
     # SECTION 1 — DATA SOURCE SELECTION
@@ -87,9 +95,12 @@ def train_tab_layout(engine, trained_model_storage):
 
     # File upload widget — hidden until the user picks "Upload your own data".
     file_input = FileInput(accept=".csv", visible=False)
-    # upload_status currently not used
+    # upload_status currently used to catch error in data input formatting: missing values, infinite values, file too big
     upload_status = Div(
         text="", styles={'color': "#247008", 'font-size': '13px'})
+    # suggestion div for suggester.py
+    suggestion_div = Div(
+        text="", styles={'color': "#2c3e50", 'font-size': '13px'})
     # caches the last base64 payload (currently informational)
     _upload_buffer = {'data': None}
 
@@ -107,6 +118,12 @@ def train_tab_layout(engine, trained_model_storage):
             path = os.path.join('data', new)
             if os.path.exists(path):
                 df = pd.read_csv(path).astype(np.float64)
+                # if catch error in data -> no apply suggestion
+                val_err = validate_dataframe(df)
+                if val_err:
+                    suggestion_div.text = ""
+                    upload_status.text = f"<span style='color:#e74c3c;'>⚠ {val_err}</span>"
+                    return
                 apply_suggestion(df, f"<b>Selected system file: {new}</b>")
             else:
                 upload_status.text = f"⚠ Pre-set file not found at {path}"
@@ -132,8 +149,15 @@ def train_tab_layout(engine, trained_model_storage):
             decoded = base64.b64decode(new)
             f = io.BytesIO(decoded)
             df = pd.read_csv(f).astype(np.float64)
+            val_err = validate_dataframe(df)
+            # if detect error in data --> not apply suggestion anymore, move on
+            if val_err:
+                suggestion_div.text = ""
+                upload_status.text = f"<span style='color:#e74c3c;'>⚠ {val_err}</span>"
+                return
             apply_suggestion(df, "Custom file uploaded successfully!")
         except Exception as e:
+            suggestion_div.text = ""
             upload_status.text = f"⚠ Error processing uploaded file: {e}"
 
     file_input.on_change('value', upload_to_local_drive)
@@ -909,7 +933,7 @@ def train_tab_layout(engine, trained_model_storage):
         try:
             df_init = pd.read_csv(initial_path).astype(np.float64)
             apply_suggestion(
-                df_init, f"<b>Loaded default pre-set system: {file_select.value}</b>")
+                df_init, f"Loaded default pre-set system: {file_select.value}")
         except Exception:
             pass  # non-fatal — user can still configure manually
 
@@ -920,7 +944,7 @@ def train_tab_layout(engine, trained_model_storage):
     # =========================================================================
 
     top_row = row(
-        column(file_select, file_input, train_s, split_select, library_select,
+        column(file_select, file_input, upload_status, suggestion_div, train_s, split_select, library_select,
                poly_s, thr_s, thr_input, row(btn_train, btn_delete), user_warning_div, width=320),
         column(p, 
                # the row below is to align: "center", but since bokeh doesnt have that css style, so we use Spacer instead

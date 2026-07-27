@@ -531,10 +531,11 @@ def test_tab_layout(engine, trained_model_storage):
     layout = column(
         Div(text="<h3>🧪 Test Evaluation</h3>"),
         row(
-            column(model_select, status_div, btn_test),
+            model_select,
             column(file_select_1, file_input_test1),
             column(file_select_2, file_input_test2),
         ),
+        column(status_div, btn_test),
         metrics_table, p1, p2,
         sizing_mode="stretch_width"
     )
