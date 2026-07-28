@@ -920,7 +920,7 @@ def train_tab_layout(engine, trained_model_storage):
 
     return column(
         top_row,
-        Div(text="<b>RESIDUAL DIAGNOSTICS</b>"),
+        Div(text="<b>RESIDUAL ANALYSIS</b>"),
         row(p_resid, p_fft, p_scatter, sizing_mode="stretch_width"),
         Div(text="<b>TRAINING HISTORY — Metrics on dx/dt</b>"),
         history_table,
