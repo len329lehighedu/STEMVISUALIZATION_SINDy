@@ -124,7 +124,7 @@ def train_tab_layout(engine, trained_model_storage):
                     suggestion_div.text = ""
                     upload_status.text = f"<span style='color:#e74c3c;'>⚠ {val_err}</span>"
                     return
-                apply_suggestion(df, f"<b>Selected system file: {new}</b>")
+                apply_suggestion(df, f"Selected system file: {new}")
             else:
                 upload_status.text = f"⚠ Pre-set file not found at {path}"
 
@@ -351,7 +351,7 @@ def train_tab_layout(engine, trained_model_storage):
     # =========================================================================
 
     # Main plot
-    p = figure(title="Model Result", height=430, sizing_mode="stretch_width")
+    p = figure(title="Model Result", height=500, sizing_mode="stretch_width")
     # Empty invisible glyph forces Bokeh to allocate a renderer/legend slot
     # immediately, avoiding a "plot has zero renderers" warning on first load.
     p.scatter([], [], alpha=0)
@@ -469,13 +469,6 @@ def train_tab_layout(engine, trained_model_storage):
         toolbar_location=None,
     )
     p_scatter.scatter([], [], alpha=0)
-
-    # Text summary shown above the 3 diagnostic plots (R², SNR, autocorrelation
-    # per state variable).
-    diag_stats_div = Div(
-        text="<a>Run a training session to see diagnostics.</a>",
-        styles={'font-size': '13px', 'color': '#00000'}
-    )
 
     counter = [0]   # run counter — monotonically increasing, never reset
     # even after deletions (see project history: run IDs
@@ -678,23 +671,6 @@ def train_tab_layout(engine, trained_model_storage):
         for fig in [p_resid, p_fft, p_scatter]:
             fig.legend.click_policy = "mute"
             fig.legend.location = "top_right"
-
-        # Build the stats summary — one line per state variable.
-        stats_html = "<b>Residual Stats:</b><br>"
-        for name, s in diag['stats'].items():
-            stats_html += (
-                f"&nbsp;&nbsp;<b>{name}</b>: "
-                f"R²(dX)={s['r2_dx']} | "
-                f"SNR={s['snr_db']} dB | "
-                f"autocorr={s['autocorr']}<br>"
-            )
-        stats_html += (
-            "<span style='color:#7f8c8d; font-size:11px;'>"
-            "<i>Computed on the full dataset (train + validation combined) — "
-            "not directly comparable to the Train/Val R² in the leaderboard below.</i>"
-            "</span>"
-        )
-        diag_stats_div.text = stats_html
 
     # =========================================================================
     # SECTION 6 — TRAIN CALLBACK
@@ -902,7 +878,6 @@ def train_tab_layout(engine, trained_model_storage):
 
         # Reset stats text and FFT x-axis range back to neutral defaults —
         # the range will be auto-scaled again on the next training run.
-        diag_stats_div.text = "<i>Run a training session to see diagnostics.</i>"
         p_fft.x_range.start = 0.0
         p_fft.x_range.end = 1.0
 
@@ -945,10 +920,9 @@ def train_tab_layout(engine, trained_model_storage):
 
     return column(
         top_row,
-        Div(text="<hr><b>RESIDUAL DIAGNOSTICS</b>"),
-        diag_stats_div,
+        Div(text="<b>RESIDUAL DIAGNOSTICS</b>"),
         row(p_resid, p_fft, p_scatter, sizing_mode="stretch_width"),
-        Div(text="<hr><b>TRAINING HISTORY — Metrics on dx/dt (derivative space)</b>"),
+        Div(text="<b>TRAINING HISTORY — Metrics on dx/dt</b>"),
         history_table,
         sizing_mode="stretch_width"
     )
