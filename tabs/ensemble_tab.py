@@ -56,7 +56,7 @@ def ensemble_tab_layout(engine, trained_model_storage):
     progress_div = Div(text="<i>Select a model to start.</i>",
                        styles={'padding': '8px'})
     ensemble_view_run = Select(
-        title="VIEWING RUN", options=[], value="", disabled=True)
+        title="VIEWING RUN", options=[], value="", visible=False)
 
     source_incl = ColumnDataSource(data=dict(
         state=[], term=[], incl_pct=[], coef_mean=[], coef_std=[], n_samples=[]))
@@ -212,7 +212,7 @@ def ensemble_tab_layout(engine, trained_model_storage):
             # not just the one currently selected in model_select)
             opts = _build_global_ensemble_options()
             ensemble_view_run.options = opts
-            ensemble_view_run.disabled = False  # enable dropdown now that at least one option exists
+            ensemble_view_run.visible = True  # enable dropdown now that at least one option exists
 
             # Build the label for the ensemble we just computed, to select it in the dropdown.
             # len(run_data['ensemble_runs']) is used (not n_boot) because it reflects the 1-indexed
@@ -288,7 +288,7 @@ def ensemble_tab_layout(engine, trained_model_storage):
             _render_results(trained_model_storage[_ensemble_option_map[ens_opts[-1]][0]]
                             ['ensemble_runs'][_ensemble_option_map[ens_opts[-1]][1]])
         else:
-            ensemble_view_run.disabled = True
+            ensemble_view_run.visible = False
 
     layout = column(
         row(model_select, n_bootstrap_s, btn_run),
