@@ -241,3 +241,12 @@ MIT License — see [LICENSE](LICENSE) for details.
 ## 🙏 Acknowledgements
 
 Built on top of the excellent [pySINDy](https://github.com/dynamicslab/pysindy) library by the Brunton Lab at the University of Washington.
+
+## Citation
+
+The Ensemble tab implementation is based on the Ensemble-SINDy method proposed in:
+
+> Fasel, U., Kutz, J. N., Brunton, B. W., & Brunton, S. L. (2022). Ensemble-SINDy: 
+> Robust sparse model discovery in the low-data, high-noise limit, with active 
+> learning and control. *Proceedings of the Royal Society A*, 478(2260), 20210904. 
+> https://doi.org/10.1098/rspa.2021.0904
