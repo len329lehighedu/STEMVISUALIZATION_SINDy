@@ -55,6 +55,8 @@ def ensemble_tab_layout(engine, trained_model_storage):
                      width=150, height=50, disabled=True)
     progress_div = Div(text="<i>Select a model to start.</i>",
                        styles={'padding': '8px'})
+    ensemble_view_run = Select(
+        title="VIEWING RUN", options=[], value="", disabled=True)
 
     source_incl = ColumnDataSource(data=dict(
         state=[], term=[], incl_pct=[], coef_mean=[], coef_std=[], n_samples=[]))
@@ -71,29 +73,120 @@ def ensemble_tab_layout(engine, trained_model_storage):
                     sizing_mode="stretch_width", height=300,
                     y_axis_label="% of bootstrap runs", toolbar_location=None)
 
+    # Rebuild whenever options change — required because the label alone cannot
+    # safely infer (run_id) via simple string splitting.
+
+    # Here's the original trained_model_storage structure
+    #     trained_model_storage = {
+    #     1: {                          # ← key = run_id (int)
+    #         'model_instance': ...,    
+    #         'plot_data': {...},
+    #         'ensemble_runs': [        # ← key = "ensemble_runs" - value = one list
+    #             {'n_bootstrap': 50, 'per_state': {...}, 'feature_names': [...]},   # index(i) 0 = "Ensemble #1 (i+1)"
+    #             {'n_bootstrap': 70, 'per_state': {...}, 'feature_names': [...]},   # index 1 = "Ensemble #2"
+    #         ]
+    #     },
+    #     2: {
+    #         'ensemble_runs': [
+    #             {'n_bootstrap': 50, ...}   # Run 2 chỉ có 1 lần ensemble
+    #         ]
+    #     },
+    #     3: {
+    #         'ensemble_runs': []    # Run 3 chưa ensemble lần nào — list rỗng, không phải thiếu key
+    #     }
+    #   }
+    # We want to make the _ensemble_option_map to look like this:
+    #     _ensemble_option_map = {
+    #     "Run 1 - Ensemble #1 - n=50": (1, 0),   # (run_id, idx in list)
+    #     "Run 1 - Ensemble #2 - n=70": (1, 1),
+    #     "Run 2 - Ensemble #1 - n=50": (2, 0),
+    # }
+
+    _ensemble_option_map = {}
+
+    def _build_global_ensemble_options():
+        """
+    Flattens ensemble_runs from ALL trained runs (not just the currently 
+    selected run in model_select) into a single list. Each label ALWAYS 
+    contains run_id so string duplicates never occur between different runs 
+    — this is essential for Bokeh to trigger on_change reliably (see the bug 
+    fixed previously: setting .value to its current value causes Bokeh to 
+    ignore it and skip calling the callback).
+    """
+        opts = []
+        _ensemble_option_map.clear()
+        for run_id in sorted(trained_model_storage.keys()): # sorted the runs: make sure Run 1 first, then Run2,... no matter which 
+                                                            # Run gets to ensembled first
+            run_data = trained_model_storage[run_id] # take the run's data
+            for i, r in enumerate(run_data.get('ensemble_runs', [])):
+                # enumerate when loop through a list will return a pair (index,element)
+                # for example: run_id = 1 (Run 1), the first inside loop will end at
+                # [
+                #     {'n_bootstrap': 50, ...},   # i=0, r=this dict
+                #     {'n_bootstrap': 70, ...},   # i=1, r=this dict
+                # ]
+                label = f"Run {run_id} - Ensemble #{i+1} - n={r['n_bootstrap']}" # Label string for UI - Viewing 
+                # r['n_bootstrap'] is to get the number of bootstrap conducted - for user to differentiate between each ensembles
+                opts.append(label)
+                _ensemble_option_map[label] = (run_id, i)
+        return opts
+
     def on_model_select_change(attr, old, new):
         btn_run.disabled = not bool(new)
         progress_div.text = "<i>Ready to run ensemble on this model.</i>" if new else "<i>Select a model to start.</i>"
 
     model_select.on_change('value', on_model_select_change)
-
     # def _print_progress(i, total):
     #     # print in terminal when run bootstrap
     #     print(f"[Ensemble] bootstrap {i}/{total}")
 
+    def on_ensemble_view_run_change(attr, old, new):
+        """Show 1 saved ensemble of any run - just rerender, no recompute"""
+        # 'new' is the newly selected label string from the dropdown (e.g. "Run 1 - Ensemble #2 - n=70")
+        # Guard: empty selection, or a stale/unknown label not present in the current map -> do nothing
+        if not new or new not in _ensemble_option_map:
+            return
+
+        # Reverse-lookup: label -> (run_id, index in that run's ensemble_runs list)
+        run_id, idx = _ensemble_option_map[new]
+
+        # Fetch the already-computed ensemble result dict directly from storage.
+        # No re-fitting here - this is purely a "replay a saved result" action.
+        result = trained_model_storage[run_id]['ensemble_runs'][idx]
+
+        # Give the user visual confirmation of which ensemble is now displayed
+        progress_div.text = f"<b style='color:#27ae60;'>✅ Showing {new}</b>"
+
+        # Re-render plots/tables using the selected saved result
+        _render_results(result)
+
+    # Register the callback: whenever the dropdown's 'value' property changes, call the handler above
+    ensemble_view_run.on_change('value', on_ensemble_view_run_change)
+
+
     def on_run_click():
+        # Guard: no run currently selected in the model_select widget -> nothing to do
         if not model_select.value:
             return
+
+        # model_select.value is a display string like "Run #1" -> extract the integer run_id
         run_id = int(model_select.value.replace("Run #", ""))
+
+        # Look up the stored data for this run (model, plot_data, feature_names, ensemble_runs, ...)
         run_data = trained_model_storage.get(run_id)
+
+        # Defensive check: run_id might no longer exist (e.g. deleted from storage) -> abort with warning
         if run_data is None:
             progress_div.text = "<span style='color:red;'>⚠ Model no longer available.</span>"
             return
 
+        # Disable the "Run" button to prevent duplicate clicks while computation is in progress
         btn_run.disabled = True
-        n_boot = n_bootstrap_s.value
+        n_boot = n_bootstrap_s.value  # number of bootstrap samples chosen by the user (slider/input)
         progress_div.text = f"<i>Running {n_boot} bootstrap samples…</i>"
 
+        # Pull out everything needed to refit: training data (X, t), feature names, and
+        # the original model configuration (library type, polynomial degree, threshold)
         X, t = run_data['plot_data']['X'], run_data['plot_data']['t']
         names = run_data['feature_names']
         lib_type = run_data['lib_type']
@@ -101,16 +194,52 @@ def ensemble_tab_layout(engine, trained_model_storage):
         threshold = run_data['threshold']
 
         try:
+            # Actually compute the ensemble (this is the expensive/slow part)
             result = engine.fit_ensemble(
                 X, t, poly_degree, threshold, names,
                 lib_type=lib_type, n_bootstrap=n_boot,
-                random_seed=run_id * 13)
-            trained_model_storage[run_id]['ensemble'] = result
-            progress_div.text = "<b style='color:#27ae60;'>✅ Ensemble complete</b>"
+                # Deterministic-but-varied seed: unique per run_id AND per ensemble attempt within
+                # that run, so re-running ensembles on the same run doesn't reuse the same seed
+                random_seed=run_id * 13 + len(run_data.get('ensemble_runs', [])) * 7)
+
+            # Persist this new ensemble result into storage.
+            # setdefault ensures 'ensemble_runs' key exists (creates [] if missing) before appending,
+            # so this works even for runs that started with no ensemble_runs key at all.
+            run_data.setdefault('ensemble_runs', []).append(result)
+
+            # ← CHANGED: rebuild the ENTIRE option list (all runs), not just for the current run_id
+            # Necessary because the dropdown is now GLOBAL (shows ensembles from every trained run,
+            # not just the one currently selected in model_select)
+            opts = _build_global_ensemble_options()
+            ensemble_view_run.options = opts
+            ensemble_view_run.disabled = False  # enable dropdown now that at least one option exists
+
+            # Build the label for the ensemble we just computed, to select it in the dropdown.
+            # len(run_data['ensemble_runs']) is used (not n_boot) because it reflects the 1-indexed
+            # position of this new result within THIS run's list, matching how _build_global_ensemble_options
+            # generates labels (Ensemble #{i+1})
+            new_label = f"Run {run_id} - Ensemble #{len(run_data['ensemble_runs'])} - n={n_boot}"
+
+            # Setting .value to this new label triggers on_ensemble_view_run_change via on_change,
+            # because this label is guaranteed unique/new (never existed before) - Bokeh WILL fire the callback.
+            # (Contrast with the earlier bug: setting .value to something IDENTICAL to the current value
+            # causes Bokeh to skip on_change entirely.)
+            ensemble_view_run.value = new_label
+
+            # ← ADDED: call directly instead of relying solely on on_change to fire automatically
+            # This is a defensive/explicit call: even though on_change is expected to fire here,
+            # calling _render_results directly guarantees the UI updates regardless of any
+            # Bokeh timing/event-order edge cases - same defensive pattern used previously
+            # when refactoring on_model_select_change.
             _render_results(result)
+
+            progress_div.text = "<b style='color:#27ae60;'>✅ Ensemble complete</b>"
         except Exception as e:
+            # Catch-all: any failure during fit_ensemble (bad data, numerical error, etc.)
+            # is shown to the user instead of crashing the callback silently
             progress_div.text = f"<span style='color:red;'>⚠ Ensemble error: {e}</span>"
         finally:
+            # Always re-enable the button, whether the run succeeded or failed
             btn_run.disabled = False
 
     def _render_results(result):
@@ -146,6 +275,21 @@ def ensemble_tab_layout(engine, trained_model_storage):
         opts = [f"Run #{i}" for i in sorted(trained_model_storage.keys())]
         model_select.options = opts
 
+        # ← ADDED: also refresh the global ensemble list, preserving the current
+        # selection if it is still valid (prevents unnecessarily resetting to empty
+        # every time you switch tabs back and forth)
+        ens_opts = _build_global_ensemble_options()
+        current = ensemble_view_run.value
+        ensemble_view_run.options = ens_opts
+        if current in ens_opts:
+            ensemble_view_run.value = current
+        elif ens_opts:
+            ensemble_view_run.value = ens_opts[-1]
+            _render_results(trained_model_storage[_ensemble_option_map[ens_opts[-1]][0]]
+                            ['ensemble_runs'][_ensemble_option_map[ens_opts[-1]][1]])
+        else:
+            ensemble_view_run.disabled = True
+
     layout = column(
         Div(text="<h3>🎲 Ensemble Analysis (Experimental)</h3>"
                  "<p style='font-size:13px;color:#7f8c8d;'>Block-bootstrap resampling to check "
@@ -153,6 +297,7 @@ def ensemble_tab_layout(engine, trained_model_storage):
                  "(UI will freeze briefly while running).</p>"),
         row(model_select, n_bootstrap_s, btn_run),
         progress_div,
+        ensemble_view_run,
         p_incl,
         incl_table,
         sizing_mode="stretch_width"
