@@ -49,7 +49,7 @@ def ensemble_tab_layout(engine, trained_model_storage):
     # Button select, slider, and data table
     model_select = Select(
         title="SELECT MODEL (FROM HISTORY)", options=[], value="")
-    n_bootstrap_s = Slider(start=20, end=100, value=50, step=10,
+    n_bootstrap_s = Slider(start=20, end=100, value=50, step=5,
                            title="Bootstrap Samples")
     btn_run = Button(label="RUN ENSEMBLE", button_type="warning",
                      width=150, height=50, disabled=True)
@@ -291,10 +291,6 @@ def ensemble_tab_layout(engine, trained_model_storage):
             ensemble_view_run.disabled = True
 
     layout = column(
-        Div(text="<h3>🎲 Ensemble Analysis (Experimental)</h3>"
-                 "<p style='font-size:13px;color:#7f8c8d;'>Block-bootstrap resampling to check "
-                 "how stable each discovered term is. Compute-heavy — runs synchronously "
-                 "(UI will freeze briefly while running).</p>"),
         row(model_select, n_bootstrap_s, btn_run),
         progress_div,
         ensemble_view_run,

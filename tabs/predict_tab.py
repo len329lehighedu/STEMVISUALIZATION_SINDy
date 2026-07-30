@@ -242,8 +242,8 @@ def predict_tab_layout(engine, trained_model_storage):
         ic_hint_div,
         ic_input,
         horizon_s,
-        status_div,
         row(btn_predict, btn_clear),
+        status_div,
         width=320,
     )
 

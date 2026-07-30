@@ -529,7 +529,6 @@ def test_tab_layout(engine, trained_model_storage):
     # =========================================================================
 
     layout = column(
-        Div(text="<h3>🧪 Test Evaluation</h3>"),
         row(
             model_select,
             column(file_select_1, file_input_test1),
