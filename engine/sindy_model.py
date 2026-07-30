@@ -368,70 +368,155 @@ class SINDyEngine:
             'n_bootstrap': n_bootstrap,
         }
         """
+        # --- STEP 0: Prepare the full derivative array once ---
+        # dX has shape (n_samples, n_states). This is computed ONCE on the
+        # full, original trajectory (not per-bootstrap) because the smoothed
+        # finite-difference derivative needs a continuous, ordered time axis
+        # to be accurate. We will later index into this same dX array using
+        # bootstrap-resampled block indices.
         dX = self.compute_derivatives(X, t)
-        n = len(t)
-        blocks = self._make_blocks(n)
-        n_blocks = len(blocks)
-        rng = np.random.default_rng(random_seed)
+        n = len(t) # total number of time samples in the trajectory
+        blocks = self._make_blocks(n) # chop the trajectory into ~20 contiguous chunks 
+                                    #(list of index arrays, e.g. [0..49], [50..99], ...)
+        n_blocks = len(blocks) # how many blocks we actually got (may be < 20
+                                # if n is small, due to the max(5, n//n_blocks) floor)
+        rng = np.random.default_rng(random_seed) # dedicated RNG so results are reproducible for a given random_seed
 
-        # Probe fit (threshold=0.0) purely to get the full, stable list of
-        # candidate term names from Θ(X) — never used for reported results.
+        # --- STEP 1: "Probe" fit — NOT a real result, just to get term names ---
+        # We fit once with threshold=0.0 (i.e. no sparsification at all) purely
+        # to ask pySINDy: "given this library type + degree, what is the full,
+        # fixed list of candidate term names?" (e.g. ['1', 'x', 'y', 'x^2', 'xy', ...]).
+        # This list must be IDENTICAL across all bootstrap runs so that we can
+        # align/aggregate inclusion counts and coefficients term-by-term.
+        # We never look at this probe model's coefficients — only its term names.
         probe_model = ps.SINDy(
             optimizer=ps.STLSQ(threshold=0.0),
             feature_library=self._build_library(lib_type, poly_degree),
         )
         probe_model.fit(X, t=t, x_dot=dX, feature_names=names)
-        term_names = probe_model.get_feature_names()
+        term_names = probe_model.get_feature_names() # e.g. ['1', 'x0', 'x1', 'x0^2', 'x0 x1', ...]
 
-        n_states = X.shape[1]
-        n_terms = len(term_names)
+        # --- STEP 2: Allocate accumulators ---
+        n_states = X.shape[1] # number of state variables (columns of X), e.g. x, y, z
+        n_terms = len(term_names) # number of candidate library terms per equation
+        
+        # inclusion_count[s, k] = how many bootstrap runs kept term k
+        # (non-zero coefficient) in the equation for state s.
         inclusion_count = np.zeros((n_states, n_terms))
+        
+        # coef_records[s][k] = a running Python list of the actual coefficient
+        # values observed for term k in state s's equation, across bootstrap
+        # runs — but ONLY collected when that term was non-zero in that run
+        # (a zero/dropped term is treated as "excluded", not "coefficient ~0").
         coef_records = [[[] for _ in range(n_terms)] for _ in range(n_states)]
 
+        # --- STEP 3: Bootstrap loop — repeat n_bootstrap times ---
         for b in range(n_bootstrap):
+            # Resample BLOCKS with replacement: draw n_blocks block-indices,
+            # allowing repeats and allowing some blocks to be skipped entirely.
+            # This is the "block bootstrap" resampling scheme (as opposed to
+            # resampling individual time points, which would break temporal
+            # autocorrelation structure within a block)
             chosen_blocks = rng.choice(n_blocks, size=n_blocks, replace=True)
+            
+            # Turn the list of chosen block IDs into an actual flat array of
+            # point indices, e.g. block 3 -> [150..199], block 3 again -> [150..199]
+            # again (duplicated), block 7 -> [350..399], etc. Order here does
+            # NOT need to be globally chronological because we're about to
+            # treat this as an independent synthetic dataset with its own
+            # dummy time axis (see below) — the derivative was already computed
+            # correctly beforehand using the REAL t.
             idx = np.concatenate([blocks[bi] for bi in chosen_blocks])
+            
+            # Slice out the resampled rows from the ORIGINAL X and dX arrays.
+            # Since dX was computed once on the true, continuous trajectory,
+            # this reuses accurate derivative estimates instead of recomputing
+            # (and potentially corrupting) derivatives on a resampled/duplicated
+            # time series.
             X_b, dX_b = X[idx], dX[idx]
-            t_dummy = np.arange(len(idx), dtype=float)   # ← THÊM dòng này
+            
+            # Dummy/fake time axis, just 0, 1, 2, ... matching len(idx).
+            # This is needed because ps.SINDy.fit() expects a `t` argument,
+            # but since we're passing x_dot=dX_b directly (already computed),
+            # this `t` is NOT used to differentiate anything — it's just a
+            # placeholder to satisfy the API. Using the real t[idx] here would
+            # actually be wrong/misleading, since idx is not monotonic/unique
+            # after block-resampling (duplicated blocks -> duplicated timestamps),
+            # which could break internal assumptions in pySINDy.
+            t_dummy = np.arange(len(idx), dtype=float)
 
+            # Build a FRESH SINDy model for this bootstrap iteration, with the
+            # same library type/degree and same sparsity threshold as the
+            # "real" fit — we want to know how much the discovered terms
+            # fluctuate under IDENTICAL hyperparameters, only the data changed.
             model_b = ps.SINDy(
                 optimizer=ps.STLSQ(threshold=threshold),
                 feature_library=self._build_library(lib_type, poly_degree),
                 differentiation_method=ps.FiniteDifference()
             )
             try:
-                # ← ĐỔI t[idx] → t_dummy
+                # Fit directly on the resampled block-bootstrap data, again
+                # passing x_dot=dX_b explicitly so pySINDy skips its own
+                # differentiation step and just does library-fit + STLSQ.
                 model_b.fit(X_b, t=t_dummy, x_dot=dX_b, feature_names=names)
             except Exception as e:
-                # ← THÊM: log lỗi thật ra console
+                # Some resamples can be degenerate (e.g. STLSQ fails to
+                # converge, or a singular matrix from too little variation in
+                # the resampled data). Rather than crashing the whole ensemble,
+                # log it and simply skip this bootstrap iteration — it will
+                # not contribute to inclusion_count or coef_records, and
+                # n_bootstrap (used as the denominator later) stays the
+                # originally requested count.
                 print(f"[Ensemble] bootstrap {b} failed: {e}")
                 continue
 
+            # coefs is a (n_states, n_terms) matrix: coefs[s, k] is the
+            # coefficient this bootstrap run assigned to term k in the
+            # equation for state s (0 if STLSQ thresholded it away).
             coefs = model_b.coefficients()  # shape (n_states, n_terms)
             for s in range(n_states):
                 for k in range(n_terms):
                     if coefs[s, k] != 0:
+                        # Term k survived thresholding in this run for state s:
+                        # count it as "included" and record its coefficient value.
                         inclusion_count[s, k] += 1
                         coef_records[s][k].append(coefs[s, k])
 
             if progress_callback:
                 progress_callback(b + 1, n_bootstrap)
 
+        # --- STEP 4: Aggregate results into the final per-state dict ---
         result = {'feature_names': term_names,
                   'per_state': {}, 'n_bootstrap': n_bootstrap}
+        
         for s in range(n_states):
+            # Resolve a readable name for this state (fallback to x0, x1, ...if no names were provided).
             state_name = names[s] if names else f"x{s}"
+            # inclusion percentage - coefficient mean - coefficient standard deviation - n samples
             incl_pct, coef_mean, coef_std, n_samp = {}, {}, {}, {}
+            
             for k, term in enumerate(term_names):
+                # Fraction of bootstrap runs (out of the REQUESTED n_bootstrap,
+                # not just the successful ones) in which this term was non-zero
+                # for this state. E.g. 0.84 means "included in 84% of runs"
                 incl_pct[term] = float(inclusion_count[s, k] / n_bootstrap)
-                vals = coef_records[s][k]
-                n_samp[term] = len(vals)
+                vals = coef_records[s][k] # list of collected coefficient values
+                n_samp[term] = len(vals) # how many runs actually produced a value
+                
+                # Only report a mean/std coefficient if the term was "reliably"
+                # present (inclusion frequency >= min_inclusion_pct) AND we
+                # actually have at least one recorded value. This avoids
+                # reporting a misleading mean/std computed from just 1-2
+                # occurrences out of 50 runs.
                 if incl_pct[term] >= min_inclusion_pct and vals:
                     coef_mean[term] = float(np.mean(vals))
                     coef_std[term] = float(np.std(vals))
                 else:
+                    # Term is too rare/unstable to summarize meaningfully —
+                    # report None instead of a noisy or empty-array statistic.
                     coef_mean[term] = None
                     coef_std[term] = None
+            # Store all four dicts for this state under its name.
             result['per_state'][state_name] = {
                 'inclusion_pct': incl_pct, 'coef_mean': coef_mean,
                 'coef_std': coef_std, 'n_samples': n_samp,
