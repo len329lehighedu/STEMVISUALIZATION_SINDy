@@ -77,9 +77,9 @@ def ensemble_tab_layout(engine, trained_model_storage):
 
     model_select.on_change('value', on_model_select_change)
 
-    def _print_progress(i, total):
-        # print in terminal when run bootstrap
-        print(f"[Ensemble] bootstrap {i}/{total}")
+    # def _print_progress(i, total):
+    #     # print in terminal when run bootstrap
+    #     print(f"[Ensemble] bootstrap {i}/{total}")
 
     def on_run_click():
         if not model_select.value:
@@ -104,7 +104,7 @@ def ensemble_tab_layout(engine, trained_model_storage):
             result = engine.fit_ensemble(
                 X, t, poly_degree, threshold, names,
                 lib_type=lib_type, n_bootstrap=n_boot,
-                random_seed=run_id * 13, progress_callback=_print_progress)
+                random_seed=run_id * 13)
             trained_model_storage[run_id]['ensemble'] = result
             progress_div.text = "<b style='color:#27ae60;'>✅ Ensemble complete</b>"
             _render_results(result)
