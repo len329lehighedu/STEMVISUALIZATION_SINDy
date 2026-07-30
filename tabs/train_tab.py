@@ -562,7 +562,7 @@ def train_tab_layout(engine, trained_model_storage):
         if warning_msg:
             user_warning_div.text = f"<b style='color:#d91212;'>⚠ {warning_msg}</b>"
         else:
-            user_warning_div.text = "<b style='color:#27ae60;'>✅ Train complete</b>"
+            user_warning_div.text = "<b style='color:#27ae60;'>✅ Train complete!</b>"
 
     # Shared color palette for multi-variable diagnostic plots (cycles if
     # a system has more than 5 state variables).

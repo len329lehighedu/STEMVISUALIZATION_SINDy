@@ -149,9 +149,15 @@ def test_tab_layout(engine, trained_model_storage):
             _upload_buffer['test2'] = None
             status_div.text = "<i>Select a model to start.</i>"
 
-            if not is_custom:
+            if is_custom:
+                btn_test.disabled = True
+            else:
                 targets = get_test_filenames_list(run_id)
                 file_select_1.value, file_select_2.value = targets[0], targets[1]
+                # Preset model: enable only if a valid Test Run 1 file was found.
+                # get_test_filenames_list returns "" for unmatched system_name,
+                # which must NOT enable the button.
+                btn_test.disabled = not bool(targets[0])
         except Exception as e:
             # Non-fatal — log to server console, leave UI in its current state
             # rather than crashing the callback.
@@ -160,7 +166,7 @@ def test_tab_layout(engine, trained_model_storage):
     model_select.on_change('value', update_ui_on_model_select)
 
     btn_test = Button(label="TEST", button_type="primary",
-                      height=50, width=100)
+                      height=50, width=100, disabled=True)
 
     # =========================================================================
     # SECTION 2 — FILE UPLOAD HANDLING
@@ -174,6 +180,7 @@ def test_tab_layout(engine, trained_model_storage):
             return
         _upload_buffer['test1'] = new
         status_div.text = "<b style='color:#27ae60;'>✅ Test file 1 ready. Click TEST.</b>"
+        btn_test.disabled = False
 
     def on_upload_test2(attr, old, new):
         """Cache Test Run 2's uploaded file content (base64) on change."""
@@ -533,8 +540,9 @@ def test_tab_layout(engine, trained_model_storage):
             model_select,
             column(file_select_1, file_input_test1),
             column(file_select_2, file_input_test2),
+            btn_test,
         ),
-        column(status_div, btn_test),
+        status_div,
         metrics_table, p1, p2,
         sizing_mode="stretch_width"
     )

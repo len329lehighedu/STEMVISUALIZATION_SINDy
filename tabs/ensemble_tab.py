@@ -51,8 +51,8 @@ def ensemble_tab_layout(engine, trained_model_storage):
         title="SELECT MODEL (FROM HISTORY)", options=[], value="")
     n_bootstrap_s = Slider(start=20, end=100, value=50, step=5,
                            title="Bootstrap Samples")
-    btn_run = Button(label="RUN ENSEMBLE", button_type="warning",
-                     width=150, height=50, disabled=True)
+    btn_run = Button(label="ENSEMBLE", button_type="primary",
+                     width=100, height=50, disabled=True)
     progress_div = Div(text="<i>Select a model to start.</i>",
                        styles={'padding': '8px'})
     ensemble_view_run = Select(
@@ -233,7 +233,7 @@ def ensemble_tab_layout(engine, trained_model_storage):
             # when refactoring on_model_select_change.
             _render_results(result)
 
-            progress_div.text = "<b style='color:#27ae60;'>✅ Ensemble complete</b>"
+            progress_div.text = "<b style='color:#27ae60;'>✅ Ensemble complete!</b>"
         except Exception as e:
             # Catch-all: any failure during fit_ensemble (bad data, numerical error, etc.)
             # is shown to the user instead of crashing the callback silently

@@ -14,7 +14,7 @@ def predict_tab_layout(engine, trained_model_storage):
 
     # IC input — show the hint based on feature names of selected model
     ic_hint_div = Div(
-        text="<i style='color:#247008;font-size:12px;'>Select a model to see variable names.</i>",
+        text="<i style='font-size:12px;'>Select a model to start.</i>",
         styles={'padding': '2px 0'}
     )
 
@@ -191,8 +191,8 @@ def predict_tab_layout(engine, trained_model_storage):
 
         ic_display = ", ".join([f"{name}={v:.2g}" for name, v in zip(var_names, x0)])
         status_div.text = (
-            f"<span style='color:#247008;'>✅ Predicted {horizon_s.value}s "
-            f"from x₀: {ic_display}</span>"
+            f"<b style='color:#27ae60;'>✅ Predicted {horizon_s.value}s "
+            f"from x₀: {ic_display}</b>"
         )
 
     btn_predict.on_click(on_predict_click)
