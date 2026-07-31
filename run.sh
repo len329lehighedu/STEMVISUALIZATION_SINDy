@@ -22,7 +22,7 @@ python3 flask_app.py &
 FLASK_PID=$!
 
 # When Ctrl+C is pressed, kill both background processes before exiting.
-trap "echo '🛑 Stopping...'; kill $BOKEH_PID $FLASK_PID; exit" SIGINT SIGTERM
+trap "echo '🛑 Stopping...'; kill -9 $BOKEH_PID $FLASK_PID; exit" SIGINT SIGTERM
 
 # ── Auto-open browser ────────────────────────────────────────────────
 # Wait a few seconds for Flask/Bokeh to actually start listening before
