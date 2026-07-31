@@ -15,7 +15,7 @@ def predict_tab_layout(engine, trained_model_storage):
     # IC input — show the hint based on feature names of selected model
     ic_hint_div = Div(
         text="<i style='font-size:12px;'>Select a model to start.</i>",
-        styles={'padding': '2px 0'}
+        styles={'padding': '8px'}
     )
 
     # Sample initial condition
@@ -33,7 +33,7 @@ def predict_tab_layout(engine, trained_model_storage):
 
     # Buttons — same size/style pair as Train tab's TRAIN + DELETE, so the
     # two "action tabs" (Train, Predict) feel like the same app.
-    btn_predict = Button(label="PREDICT", button_type="primary", height=50, width=100)
+    btn_predict = Button(label="PREDICT", button_type="primary", height=50, width=100, disabled=True)
     btn_clear   = Button(label="CLEAR",   button_type="danger",  height=50, width=100)
 
     # -------------------------------------------------------------------------
@@ -66,6 +66,8 @@ def predict_tab_layout(engine, trained_model_storage):
             )
         else:
             ic_hint_div.text = "<i style='color:red;'>⚠ Feature names missing.</i>"
+        
+        btn_predict.disabled = False
 
     model_select.on_change('value', on_model_select_change)
 
@@ -232,6 +234,11 @@ def predict_tab_layout(engine, trained_model_storage):
                 model_select.value = options[-1]
                 # trigger IC hint update
                 on_model_select_change(None, None, model_select.value)
+        else:
+            btn_predict.disabled = True
+            ic_hint_div.text = "<i>Select a model to start.</i>"
+            model_select.value = ""
+            ic_input.value = ""
 
     # -------------------------------------------------------------------------
     # 6. Layout — sidebar (fixed width) + plot (stretch), matching the

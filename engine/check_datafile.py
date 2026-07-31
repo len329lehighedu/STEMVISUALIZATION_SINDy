@@ -21,7 +21,7 @@ def validate_dataframe(df):
     if df.shape[1] < 2:
         return "CSV must have at least 2 columns: time + one state variable."
     if df.isnull().values.any():
-        return "CSV contains missing/NaN values — please clean the data first."
+        return "CSV contains missing/NaN values."
     if not np.isfinite(df.values).all():
-        return "CSV contains infinite values — please check the data."
+        return "CSV contains infinite values."
     return None

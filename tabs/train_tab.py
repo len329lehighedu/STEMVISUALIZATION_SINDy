@@ -98,7 +98,7 @@ def train_tab_layout(engine, trained_model_storage):
     # upload_status currently used to catch error in data input formatting: missing values, infinite values, file too big
     upload_status = Div(
         text="", styles={'color': "#247008", 'font-size': '13px'})
-    # suggestion div for suggester.py
+    # suggestion div for suggester.py -- won't be used until I find a better way for this
     suggestion_div = Div(
         text="", styles={'color': "#2c3e50", 'font-size': '13px'})
     # caches the last base64 payload (currently informational)
@@ -155,7 +155,7 @@ def train_tab_layout(engine, trained_model_storage):
                 suggestion_div.text = ""
                 upload_status.text = f"<span style='color:#e74c3c;'>⚠ {val_err}</span>"
                 return
-            apply_suggestion(df, "Custom file uploaded successfully!")
+            apply_suggestion(df, "File uploaded successfully!")
         except Exception as e:
             suggestion_div.text = ""
             upload_status.text = f"⚠ Error processing uploaded file: {e}"
@@ -906,7 +906,7 @@ def train_tab_layout(engine, trained_model_storage):
     # =========================================================================
 
     top_row = row(
-        column(file_select, file_input, upload_status, suggestion_div, train_s, split_select, library_select,
+        column(file_select, file_input, upload_status, train_s, split_select, library_select,
                poly_s, thr_s, thr_input, row(btn_train, btn_delete), user_warning_div, width=320),
         column(p,
                # the row below is to align: "center", but since bokeh doesnt have that css style, so we use Spacer instead
