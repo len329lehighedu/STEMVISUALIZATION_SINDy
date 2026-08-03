@@ -88,11 +88,11 @@ def ensemble_tab_layout(engine, trained_model_storage):
     #     },
     #     2: {
     #         'ensemble_runs': [
-    #             {'n_bootstrap': 50, ...}   # Run 2 chỉ có 1 lần ensemble
+    #             {'n_bootstrap': 50, ...}   # Run 2: 1 ensemble
     #         ]
     #     },
     #     3: {
-    #         'ensemble_runs': []    # Run 3 chưa ensemble lần nào — list rỗng, không phải thiếu key
+    #         'ensemble_runs': []    # Run 3: 0 ensemble — empty list
     #     }
     #   }
     # We want to make the _ensemble_option_map to look like this:
@@ -125,7 +125,7 @@ def ensemble_tab_layout(engine, trained_model_storage):
                 #     {'n_bootstrap': 50, ...},   # i=0, r=this dict
                 #     {'n_bootstrap': 70, ...},   # i=1, r=this dict
                 # ]
-                label = f"Run {run_id} - Ensemble #{i+1} - n={r['n_bootstrap']}" # Label string for UI - Viewing 
+                label = f"Run {run_id} - Ensemble #{i+1} - n = {r['n_bootstrap']}" # Label string for UI - Viewing 
                 # r['n_bootstrap'] is to get the number of bootstrap conducted - for user to differentiate between each ensembles
                 opts.append(label)
                 _ensemble_option_map[label] = (run_id, i)
@@ -218,7 +218,7 @@ def ensemble_tab_layout(engine, trained_model_storage):
             # len(run_data['ensemble_runs']) is used (not n_boot) because it reflects the 1-indexed
             # position of this new result within THIS run's list, matching how _build_global_ensemble_options
             # generates labels (Ensemble #{i+1})
-            new_label = f"Run {run_id} - Ensemble #{len(run_data['ensemble_runs'])} - n={n_boot}"
+            new_label = f"Run {run_id} - Ensemble #{len(run_data['ensemble_runs'])} - n = {n_boot}"
 
             # Setting .value to this new label triggers on_ensemble_view_run_change via on_change,
             # because this label is guaranteed unique/new (never existed before) - Bokeh WILL fire the callback.
