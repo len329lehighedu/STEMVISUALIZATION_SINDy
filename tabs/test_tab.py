@@ -144,13 +144,25 @@ def test_tab_layout(engine, trained_model_storage):
             file_input_test1.visible = is_custom
             file_input_test2.visible = is_custom
 
-            # Reset buffer — prevents leaking an upload from a different model.
-            _upload_buffer['test1'] = None
-            _upload_buffer['test2'] = None
-            status_div.text = "<i>Select a model to start.</i>"
-
+            # FileInput.value is read-only from the server side, so we
+            # cannot force-clear it to guarantee the next upload fires a
+            # fresh change event. More importantly: clearing the buffer on
+            # every model switch was the wrong design to begin with — a
+            # user commonly reuses the SAME test file across multiple
+            # training runs (Run 1, Run 2, ...). We now KEEP whatever is
+            # cached in _upload_buffer across model switches instead of
+            # wiping it. Any genuine incompatibility (e.g. this model
+            # expects a different number of state variables) is still
+            # caught safely later by _run_single_test()'s variable-count
+            # check, so reusing a stale buffer is never unsafe — at worst
+            # it produces a clear error message instead of a crash.
             if is_custom:
-                btn_test.disabled = True
+                if _upload_buffer["test1"]:
+                    status_div.text = "<b style='color:#27ae60;'>✅ Reusing previously uploaded Test file 1. Click TEST.</b>"
+                    btn_test.disabled = False
+                else:
+                    status_div.text = "<i>Please upload a test file.</i>"
+                    btn_test.disabled = True
             else:
                 targets = get_test_filenames_list(run_id)
                 file_select_1.value, file_select_2.value = targets[0], targets[1]
@@ -188,6 +200,7 @@ def test_tab_layout(engine, trained_model_storage):
             return
         _upload_buffer['test2'] = new
         status_div.text = "<b style='color:#27ae60;'>✅ Test file 2 ready. Click TEST.</b>"
+        # btn_test.disabled = False
 
     file_input_test1.on_change('value', on_upload_test1)
     file_input_test2.on_change('value', on_upload_test2)
@@ -477,6 +490,7 @@ def test_tab_layout(engine, trained_model_storage):
                 df2, err2 = _load_df_from_buffer(_upload_buffer['test2'])
             else:
                 df2, err2 = None, None  # user chose not to provide a 2nd test file
+                p2.visible = False
         else:
             df2, err2 = _load_df_from_select(file_select_2.value) \
                 if file_select_2.value != "(none)" else (None, None)
@@ -524,8 +538,30 @@ def test_tab_layout(engine, trained_model_storage):
         """
         opts = [f"Run #{i}" for i in sorted(trained_model_storage.keys())]
         model_select.options = opts
-        if opts and not model_select.value:
-            model_select.value = opts[-1]
+        
+        # The old check `if opts and not model_select.value` only catches
+        # the empty-value case. It misses the common case where the
+        # currently-selected run was deleted from trained_model_storage
+        # (e.g. removed from the Train tab leaderboard) — model_select.value
+        # still holds a stale string like "Run #1" that no longer exists in
+        # `opts`. Since Bokeh only fires on_change when the value actually
+        # changes, that stale value never triggers update_ui_on_model_select,
+        # so file input visibility / TEST button state stay frozen on
+        # whatever the deleted run last left behind — which, combined with
+        # the persistent upload buffer, can leave TEST looking enabled while
+        # actually pointing at a run_id that no longer exists.
+        if opts:
+            if model_select.value not in opts:
+                model_select.value = opts[-1]
+        else:
+            # No runs left at all.
+            model_select.value = ""
+            file_input_test1.visible = False
+            file_input_test2.visible = False
+            file_select_1.visible = True
+            file_select_2.visible = True
+            btn_test.disabled = True
+            status_div.text = "<i>No trained models available. Train a model first.</i>"
 
         f_list = [f for f in os.listdir('data') if f.endswith('.csv')]
         file_select_1.options = f_list
