@@ -553,6 +553,7 @@ def test_tab_layout(engine, trained_model_storage):
         if opts:
             if model_select.value not in opts:
                 model_select.value = opts[-1]
+            status_div.text = "<i>Ready to test this model.</i>"
         else:
             # No runs left at all.
             model_select.value = ""

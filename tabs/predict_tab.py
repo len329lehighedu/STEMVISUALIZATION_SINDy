@@ -236,7 +236,7 @@ def predict_tab_layout(engine, trained_model_storage):
                 on_model_select_change(None, None, model_select.value)
         else:
             btn_predict.disabled = True
-            ic_hint_div.text = "<i>Select a model to start.</i>"
+            ic_hint_div.text = "<i>No trained models available. Train a model first.</i>"
             model_select.value = ""
             ic_input.value = ""
 

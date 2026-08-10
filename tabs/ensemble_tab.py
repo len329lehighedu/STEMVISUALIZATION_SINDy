@@ -53,7 +53,7 @@ def ensemble_tab_layout(engine, trained_model_storage):
                            title="Bootstrap Samples")
     btn_run = Button(label="ENSEMBLE", button_type="primary",
                      width=100, height=50, disabled=True)
-    progress_div = Div(text="<i>Select a model to start.</i>",
+    progress_div = Div(text="<i>No trained models available. Train a model first.</i>",
                        styles={'padding': '8px'})
     ensemble_view_run = Select(
         title="VIEWING RUN", options=[], value="", visible=False)
@@ -275,6 +275,10 @@ def ensemble_tab_layout(engine, trained_model_storage):
         opts = [f"Run #{i}" for i in sorted(trained_model_storage.keys())]
         model_select.options = opts
 
+        if not opts:
+            progress_div.text = "<i>No trained models available. Train a model first.</i>"
+        elif not model_select.value:
+            progress_div.text = "<i>Select a model to start.</i>"
         # ← ADDED: also refresh the global ensemble list, preserving the current
         # selection if it is still valid (prevents unnecessarily resetting to empty
         # every time you switch tabs back and forth)
