@@ -49,7 +49,7 @@ def ensemble_tab_layout(engine, trained_model_storage):
     # Button select, slider, and data table
     model_select = Select(
         title="SELECT MODEL (FROM HISTORY)", options=[], value="")
-    n_bootstrap_s = Slider(start=20, end=100, value=50, step=5,
+    n_bootstrap_s = Slider(start=100, end=100000, value=100, step=100,
                            title="Bootstrap Samples")
     btn_run = Button(label="ENSEMBLE", button_type="primary",
                      width=100, height=50, disabled=True)
@@ -125,7 +125,7 @@ def ensemble_tab_layout(engine, trained_model_storage):
                 #     {'n_bootstrap': 50, ...},   # i=0, r=this dict
                 #     {'n_bootstrap': 70, ...},   # i=1, r=this dict
                 # ]
-                label = f"Run {run_id} - Ensemble #{i+1} - n = {r['n_bootstrap']}" # Label string for UI - Viewing 
+                label = f"Run #{run_id} - Ensemble #{i+1} - n = {r['n_bootstrap']}" # Label string for UI - Viewing 
                 # r['n_bootstrap'] is to get the number of bootstrap conducted - for user to differentiate between each ensembles
                 opts.append(label)
                 _ensemble_option_map[label] = (run_id, i)
@@ -165,83 +165,125 @@ def ensemble_tab_layout(engine, trained_model_storage):
 
 
     def on_run_click():
-        # Guard: no run currently selected in the model_select widget -> nothing to do
+        # Guard: no run currently selected in the model_select widget ->
+        # nothing to do.
         if not model_select.value:
             return
 
-        # model_select.value is a display string like "Run #1" -> extract the integer run_id
+        # model_select.value is a display string like "Run #1" -> extract
+        # the integer run_id.
         run_id = int(model_select.value.replace("Run #", ""))
 
-        # Look up the stored data for this run (model, plot_data, feature_names, ensemble_runs, ...)
+        # Look up the stored data for this run (model, plot_data,
+        # feature_names, ensemble_runs, ...).
         run_data = trained_model_storage.get(run_id)
 
-        # Defensive check: run_id might no longer exist (e.g. deleted from storage) -> abort with warning
+        # Defensive check: run_id might no longer exist (e.g. deleted from
+        # storage between page load and clicking Run) -> abort with warning.
         if run_data is None:
             progress_div.text = "<span style='color:red;'>⚠ Model no longer available.</span>"
             return
 
-        # Disable the "Run" button to prevent duplicate clicks while computation is in progress
+        # Disable the "Run" button to prevent duplicate clicks while
+        # computation is in progress (fit_ensemble runs synchronously and
+        # can take a while — see the module docstring).
         btn_run.disabled = True
-        n_boot = n_bootstrap_s.value  # number of bootstrap samples chosen by the user (slider/input)
+        n_boot = n_bootstrap_s.value  # number of bootstrap samples from the slider
         progress_div.text = f"<i>Running {n_boot} bootstrap samples…</i>"
 
-        # Pull out everything needed to refit: training data (X, t), feature names, and
-        # the original model configuration (library type, polynomial degree, threshold)
-        X, t = run_data['plot_data']['X'], run_data['plot_data']['t']
+        # Pull out the model's original training configuration (library
+        # type, polynomial degree, threshold) and the data it was fit on.
+        plot_data = run_data['plot_data']
         names = run_data['feature_names']
         lib_type = run_data['lib_type']
         poly_degree = run_data['poly_degree']
         threshold = run_data['threshold']
 
-        try:
-            # Actually compute the ensemble (this is the expensive/slow part)
-            result = engine.fit_ensemble(
-                X, t, poly_degree, threshold, names,
-                lib_type=lib_type, n_bootstrap=n_boot,
-                # Deterministic-but-varied seed: unique per run_id AND per ensemble attempt within
-                # that run, so re-running ensembles on the same run doesn't reuse the same seed
-                random_seed=run_id * 13 + len(run_data.get('ensemble_runs', [])) * 7)
+        # --- Recover the ORIGINAL (unpooled) trajectory list, if available ---
+        # train_tab.py now stores the raw list of (X_i, t_i) pairs — one per
+        # uploaded initial condition — under plot_data['trajectories'], in
+        # addition to the already-pooled plot_data['X']/plot_data['t'] used
+        # for plotting. fit_ensemble needs the UNPOOLED list so it can
+        # differentiate each trajectory on its own continuous time axis
+        # (exactly like fit_model does) instead of differentiating across
+        # a seam where t restarts at 0 for the next file.
+        #
+        # Backward compatibility: runs trained before this field existed
+        # only have the pooled X/t. In that case, fall back to treating the
+        # pooled data as a single trajectory — this reproduces the OLD
+        # (single-trajectory) behavior exactly, so old runs don't break,
+        # they just don't get the multi-IC-aware bootstrap improvement.
+        trajectories = plot_data.get('trajectories') or \
+            [(plot_data['X'], plot_data['t'])]
 
-            # Persist this new ensemble result into storage.
-            # setdefault ensures 'ensemble_runs' key exists (creates [] if missing) before appending,
-            # so this works even for runs that started with no ensemble_runs key at all.
+        # Split into "primary" trajectory (positional args expected by
+        # fit_ensemble) and "extra" trajectories (optional kwarg). This
+        # mirrors exactly how train_tab.py calls engine.fit_model().
+        X0, t0 = trajectories[0]
+        extra = trajectories[1:] or None
+
+        try:
+            # Actually compute the ensemble (this is the expensive/slow
+            # part — n_bootstrap independent SINDy fits, run synchronously).
+            result = engine.fit_ensemble(
+                X0, t0, poly_degree, threshold, names,
+                lib_type=lib_type, n_bootstrap=n_boot,
+                # Deterministic-but-varied seed: unique per run_id AND per
+                # ensemble attempt within that run, so re-running ensembles
+                # on the same run doesn't silently reuse the same seed.
+                random_seed=run_id * 13 + len(run_data.get('ensemble_runs', [])) * 7,
+                # Pass along any additional initial-condition trajectories
+                # so the block bootstrap respects trajectory boundaries
+                # (see _make_blocks_multi) and never differentiates across
+                # a file seam.
+                extra_trajectories=extra,
+            )
+
+            # Persist this new ensemble result into storage. setdefault
+            # ensures 'ensemble_runs' key exists (creates [] if missing)
+            # before appending, so this works even for runs that started
+            # with no ensemble_runs key at all.
             run_data.setdefault('ensemble_runs', []).append(result)
 
-            # ← CHANGED: rebuild the ENTIRE option list (all runs), not just for the current run_id
-            # Necessary because the dropdown is now GLOBAL (shows ensembles from every trained run,
-            # not just the one currently selected in model_select)
+            # Rebuild the ENTIRE option list (across all runs, not just the
+            # current run_id) — the dropdown is global, showing ensembles
+            # from every trained run so the user can compare across runs.
             opts = _build_global_ensemble_options()
             ensemble_view_run.options = opts
             ensemble_view_run.visible = True  # enable dropdown now that at least one option exists
 
-            # Build the label for the ensemble we just computed, to select it in the dropdown.
-            # len(run_data['ensemble_runs']) is used (not n_boot) because it reflects the 1-indexed
-            # position of this new result within THIS run's list, matching how _build_global_ensemble_options
-            # generates labels (Ensemble #{i+1})
+            # Build the label for the ensemble we just computed, so we can
+            # select it in the dropdown. len(run_data['ensemble_runs']) is
+            # used (not n_boot) because it reflects the 1-indexed position
+            # of this new result within THIS run's list, matching how
+            # _build_global_ensemble_options() generates labels
+            # ("Ensemble #{i+1}").
             new_label = f"Run {run_id} - Ensemble #{len(run_data['ensemble_runs'])} - n = {n_boot}"
 
-            # Setting .value to this new label triggers on_ensemble_view_run_change via on_change,
-            # because this label is guaranteed unique/new (never existed before) - Bokeh WILL fire the callback.
-            # (Contrast with the earlier bug: setting .value to something IDENTICAL to the current value
-            # causes Bokeh to skip on_change entirely.)
+            # Setting .value to this new label triggers
+            # on_ensemble_view_run_change via on_change, because this label
+            # is guaranteed unique/new (never existed before) — Bokeh WILL
+            # fire the callback. (Contrast with the earlier bug: setting
+            # .value to something IDENTICAL to the current value causes
+            # Bokeh to skip on_change entirely.)
             ensemble_view_run.value = new_label
 
-            # ← ADDED: call directly instead of relying solely on on_change to fire automatically
-            # This is a defensive/explicit call: even though on_change is expected to fire here,
-            # calling _render_results directly guarantees the UI updates regardless of any
-            # Bokeh timing/event-order edge cases - same defensive pattern used previously
-            # when refactoring on_model_select_change.
+            # Defensive/explicit call: even though on_change is expected to
+            # fire and call _render_results itself, call it directly here
+            # too, guaranteeing the UI updates regardless of any Bokeh
+            # timing/event-order edge case.
             _render_results(result)
 
             progress_div.text = "<b style='color:#27ae60;'>✅ Ensemble complete!</b>"
         except Exception as e:
-            # Catch-all: any failure during fit_ensemble (bad data, numerical error, etc.)
-            # is shown to the user instead of crashing the callback silently
+            # Catch-all: any failure during fit_ensemble (bad data,
+            # numerical error, etc.) is shown to the user instead of
+            # crashing the callback silently.
             progress_div.text = f"<span style='color:red;'>⚠ Ensemble error: {e}</span>"
         finally:
-            # Always re-enable the button, whether the run succeeded or failed
+            # Always re-enable the button, whether the run succeeded or failed.
             btn_run.disabled = False
-
+            
     def _render_results(result):
         rows = dict(state=[], term=[], incl_pct=[],
                     coef_mean=[], coef_std=[], n_samples=[])
