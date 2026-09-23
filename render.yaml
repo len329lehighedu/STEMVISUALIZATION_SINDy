@@ -16,7 +16,7 @@
 
 services:
   # --------------------------------------------------------------------
-  # Bokeh backend — runs the SINDy engine and all 3 tabs.
+  # Bokeh backend — runs the SINDy engine and all 4 tabs.
   # --------------------------------------------------------------------
   - type: web
     name: sindy-bokeh-leminhngo
