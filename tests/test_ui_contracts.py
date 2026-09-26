@@ -85,9 +85,9 @@ class UIContractTests(unittest.TestCase):
 
         comparison = next(
             div for div in layout.select({"type": Div})
-            if "ORIGINAL SINDy EQUATION" in div.text
+            if "ORIGINAL SINDY EQUATION" in div.text.upper()
         )
-        self.assertIn("CONSENSUS EQUATION", comparison.text)
+        self.assertIn("CONSENSUS EQUATION", comparison.text.upper())
         self.assertIn("-1.25 x", comparison.text)
 
         threshold = next(

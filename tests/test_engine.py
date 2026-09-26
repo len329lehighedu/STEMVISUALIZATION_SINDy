@@ -44,6 +44,14 @@ class _BootstrapSINDy:
 
 
 class SINDyEngineTests(unittest.TestCase):
+    def test_random_blocks_cover_the_complete_trajectory(self):
+        engine = SINDyEngine()
+        blocks = engine._make_blocks(103)
+        covered = np.concatenate(blocks)
+
+        np.testing.assert_array_equal(covered, np.arange(103))
+        self.assertEqual(len(blocks[-1]), 3)
+
     def test_pool_trajectories_differentiates_each_trajectory_separately(self):
         engine = SINDyEngine()
         calls = []

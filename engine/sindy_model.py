@@ -481,9 +481,12 @@ class SINDyEngine:
     # ------------------------------------------------------------------
     def _make_blocks(self, n, n_blocks=20):
         block_size = max(5, n // n_blocks)
-        n_blocks_total = n // block_size
-        return [np.arange(b * block_size, (b + 1) * block_size)
-                for b in range(n_blocks_total)]
+        # Include the final partial block instead of truncating it. The old
+        # floor-division implementation silently omitted up to
+        # ``block_size - 1`` tail samples, so those samples were neither fit
+        # nor displayed as Train/Validation points for custom trajectories.
+        return [np.arange(start, min(start + block_size, n))
+                for start in range(0, n, block_size)]
 
     def _make_blocks_multi(self, lengths, n_blocks=20):
         """

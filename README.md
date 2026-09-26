@@ -91,6 +91,13 @@ The diagnostics show you numbers and plots. *You* interpret them. No automated l
 - Report failed bootstrap fits separately; inclusion percentages use only
   successful fits as their denominator
 
+### 💬 SINDy Research Guide
+- Browse 14 curated questions covering training, testing, prediction,
+  multi-trajectory data, and ensemble interpretation
+- Search locally by topic or keyword, with related-question suggestions
+- Use a conversational interface with no external API, quota, account, or
+  uploaded-data transfer
+
 ---
 
 ## 📁 Project Structure
@@ -287,6 +294,8 @@ The test suite covers multi-trajectory pooling, FFT-grid alignment, residual
 segmentation, ensemble failure accounting, coefficient confidence intervals,
 consensus equations, prediction initial-condition compatibility, test-column
 validation, and construction of all four Bokeh tabs.
+The Flask smoke tests also verify the local assistant knowledge base and its
+JavaScript asset.
 
 ```bash
 python3 -m unittest discover -s tests -v
