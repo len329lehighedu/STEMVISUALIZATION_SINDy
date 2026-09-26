@@ -80,7 +80,12 @@ The diagnostics show you numbers and plots. *You* interpret them. No automated l
 
 ### 🎲 Ensemble Tab
 - Run block-bootstrap SINDy fits on any model in training history
-- Inspect term inclusion frequency and coefficient mean/standard deviation
+- Inspect term inclusion frequency and coefficient mean ± standard deviation
+- Report empirical 95% coefficient intervals only for terms included in
+  strictly more than 50% of successful bootstrap fits
+- Score term stability from inclusion frequency and coefficient-sign consistency
+- Build an adjustable consensus equation and compare it directly with the
+  original fitted equation
 - Preserve temporal structure and trajectory boundaries during resampling
 - Save and replay multiple ensemble analyses for each trained run
 - Report failed bootstrap fits separately; inclusion percentages use only
@@ -279,8 +284,9 @@ Three principles guided every design decision:
 ## ✅ Automated Tests
 
 The test suite covers multi-trajectory pooling, FFT-grid alignment, residual
-segmentation, ensemble failure accounting, prediction initial-condition
-compatibility, test-column validation, and construction of all four Bokeh tabs.
+segmentation, ensemble failure accounting, coefficient confidence intervals,
+consensus equations, prediction initial-condition compatibility, test-column
+validation, and construction of all four Bokeh tabs.
 
 ```bash
 python3 -m unittest discover -s tests -v

@@ -107,6 +107,35 @@ class SINDyEngineTests(unittest.TestCase):
         self.assertEqual(result["n_successful_bootstrap"], 2)
         self.assertEqual(result["n_failed_bootstrap"], 1)
         self.assertEqual(result["per_state"]["x"]["inclusion_pct"]["x"], 0.5)
+        self.assertIsNone(result["per_state"]["x"]["coef_ci_low"]["x"])
+        self.assertIsNone(result["per_state"]["x"]["coef_ci_high"]["x"])
+
+    def test_ensemble_reports_ci_and_stability_above_majority(self):
+        engine = SINDyEngine()
+        t = np.linspace(0, 2, 40)
+        X = np.sin(t)[:, None]
+        fake_models = [
+            _ProbeSINDy(),
+            _BootstrapSINDy(coefficient=1.0),
+            _BootstrapSINDy(coefficient=2.0),
+            _BootstrapSINDy(coefficient=3.0),
+            _BootstrapSINDy(coefficient=0.0),
+        ]
+
+        with patch("engine.sindy_model.ps.SINDy", side_effect=fake_models):
+            result = engine.fit_ensemble(
+                X, t, poly_degree=1, threshold=0.1, names=["x"],
+                n_bootstrap=4,
+            )
+
+        stats = result["per_state"]["x"]
+        self.assertEqual(stats["inclusion_pct"]["x"], 0.75)
+        self.assertAlmostEqual(stats["coef_mean"]["x"], 2.0)
+        self.assertAlmostEqual(stats["coef_std"]["x"], np.std([1, 2, 3]))
+        self.assertAlmostEqual(stats["coef_ci_low"]["x"], 1.05)
+        self.assertAlmostEqual(stats["coef_ci_high"]["x"], 2.95)
+        self.assertEqual(stats["sign_consistency"]["x"], 1.0)
+        self.assertEqual(stats["stability_score"]["x"], 0.75)
 
     def test_ensemble_raises_when_every_bootstrap_fails(self):
         engine = SINDyEngine()
