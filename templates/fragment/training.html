@@ -41,9 +41,11 @@
                 <p>Start from the Select System dropdown. Pick one of the pre-set systems to test SINDy's ability or
                     upload your own data file. The file must have time in the first column and one state variable per
                     subsequent column — \( t, x_1, x_2, \dots, x_n \).</p>
-                <p>When the file is uploaded, the module also runs the System Suggestion in the background: it analyzes
-                    the linearity, periodicity, and noise level of your data and pre-fills the hyperparameter controls
-                    below with a reasonable starting point. These are only suggestions, as they can be wrong.</p>
+                <p>When data is loaded, <b>Data Scout</b> quickly compares real SINDy candidates on a chronological
+                    validation block. It offers Simplest, Balanced, and Best derivative fit profiles and pre-fills the
+                    library, degree/harmonics, and threshold controls. With multiple files, every trajectory is
+                    differentiated and split separately. These remain starting suggestions, not claims of an optimal or
+                    physically correct equation.</p>
             </div>
             <div class="doc-row-media">
                 <div class="doc-frame">
@@ -139,6 +141,9 @@
                     Fourier harmonic) goes.</p>
                 <p>The <b>Sparsity Threshold \( (\lambda) \)</b> prunes small coefficients: higher \( \lambda \) means a
                     simpler, sparser equation.</p>
+                <p>The <b>Data Scout Profile</b> selector applies one of three screened configurations. Balanced is the
+                    default; Simplest favors parsimony, while Best derivative fit prioritizes held-out \(\dot X\)
+                    accuracy. Always verify the selected profile using residuals, simulation, and domain knowledge.</p>
             </div>
             <div class="doc-row-media">
                 <div class="doc-frame">

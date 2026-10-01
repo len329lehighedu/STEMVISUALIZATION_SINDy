@@ -1,149 +1,274 @@
-# engine/ai_suggester.py
-#
-# PURPOSE
-# -------
-# Pure data-analysis heuristic that recommends starting SINDy hyperparameters
-# (library / polynomial degree / sparsity threshold) for a given dataset —
-# no UI/Bokeh dependency, so it can be unit-tested or reused outside the
-# Train tab (e.g. batch processing, a future API).
+"""Fast, offline hyperparameter scouting for SINDy.
+
+The scout is intentionally a recommender, not an optimizer. It evaluates a
+small set of real SINDy fits on blocked validation data and returns three
+useful starting points: simplest, balanced, and best derivative fit.
+"""
+
+from __future__ import annotations
+
+import warnings
 
 import numpy as np
+import pandas as pd
+import pysindy as ps
 from scipy.signal import savgol_filter
-from sklearn.preprocessing import PolynomialFeatures
-from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score
 
 
+DEFAULT_THRESHOLDS = (0.005, 0.02, 0.05, 0.10, 0.20, 0.35, 0.50)
+
+
+def _library(kind, degree):
+    if kind == "Polynomial":
+        return ps.PolynomialLibrary(degree=int(degree))
+    if kind == "Fourier":
+        return ps.FourierLibrary(n_frequencies=int(degree))
+    if kind == "Combined":
+        return (ps.PolynomialLibrary(degree=int(degree))
+                + ps.FourierLibrary(n_frequencies=int(degree)))
+    raise ValueError(f"Unknown library: {kind}")
+
+
+def _smooth_derivative_and_noise(df):
+    """Return X, dX/dt, and a dimensionless robust noise estimate."""
+    t = np.asarray(df.iloc[:, 0], dtype=float)
+    X = np.asarray(df.iloc[:, 1:], dtype=float)
+    if len(t) < 9:
+        raise ValueError("Data Scout needs at least 9 samples per trajectory.")
+    if np.any(np.diff(t) <= 0):
+        raise ValueError("Time must be strictly increasing in every trajectory.")
+
+    target = min(11, max(5, (len(t) // 10) * 2 + 1))
+    window = min(target, len(t) if len(t) % 2 else len(t) - 1)
+    window = max(5, window)
+    polyorder = min(3, window - 2)
+
+    smooth = np.empty_like(X)
+    dXdt = np.empty_like(X)
+    noise_ratios = []
+    for j in range(X.shape[1]):
+        smooth[:, j] = savgol_filter(
+            X[:, j], window_length=window, polyorder=polyorder)
+        # Supplying the actual time vector avoids silently assuming uniform dt.
+        dXdt[:, j] = np.gradient(smooth[:, j], t)
+
+        # Robust, dimensionless noise estimate. Unlike the old FFT code, this
+        # does not confuse a large physical spectral peak with sensor noise.
+        residual = X[:, j] - smooth[:, j]
+        residual_sigma = 1.4826 * np.median(
+            np.abs(residual - np.median(residual)))
+        state_scale = 1.4826 * np.median(
+            np.abs(X[:, j] - np.median(X[:, j])))
+        if state_scale < 1e-12:
+            state_scale = max(float(np.std(X[:, j])), 1e-12)
+        noise_ratios.append(float(residual_sigma / state_scale))
+
+    return X, dXdt, float(np.median(noise_ratios))
+
+
+def _prepare_blocked_validation(dataframes, train_fraction=0.7):
+    """Differentiate and split every trajectory independently."""
+    train_X, train_dX, val_X, val_dX = [], [], [], []
+    noise_levels = []
+    irregular = False
+
+    for df in dataframes:
+        X, dXdt, noise = _smooth_derivative_and_noise(df)
+        t = np.asarray(df.iloc[:, 0], dtype=float)
+        dt = np.diff(t)
+        irregular = irregular or (
+            np.std(dt) / max(abs(float(np.mean(dt))), 1e-12) > 0.02)
+
+        split = int(len(X) * train_fraction)
+        split = min(max(split, 5), len(X) - 3)
+        train_X.append(X[:split])
+        train_dX.append(dXdt[:split])
+        val_X.append(X[split:])
+        val_dX.append(dXdt[split:])
+        noise_levels.append(noise)
+
+    return {
+        "X_train": np.vstack(train_X),
+        "dX_train": np.vstack(train_dX),
+        "X_val": np.vstack(val_X),
+        "dX_val": np.vstack(val_dX),
+        "noise_ratio": float(np.median(noise_levels)),
+        "irregular_time": irregular,
+    }
+
+
+def _candidate_grid(libraries, thresholds):
+    for kind in libraries:
+        degrees = (1, 2, 3) if kind == "Polynomial" else (1, 2)
+        for degree in degrees:
+            for threshold in thresholds:
+                yield kind, degree, float(threshold)
+
+
+def _fit_candidate(kind, degree, threshold, prepared, state_names):
+    optimizer = ps.STLSQ(
+        threshold=threshold,
+        normalize_columns=False,
+    )
+    model = ps.SINDy(
+        optimizer=optimizer,
+        feature_library=_library(kind, degree),
+        differentiation_method=ps.FiniteDifference(),
+    )
+    t_dummy = np.arange(len(prepared["X_train"]), dtype=float)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        model.fit(
+            prepared["X_train"],
+            t=t_dummy,
+            x_dot=prepared["dX_train"],
+            feature_names=state_names,
+        )
+
+    prediction = np.asarray(model.predict(prepared["X_val"]), dtype=float)
+    truth = prepared["dX_val"]
+    per_state_scale = np.std(truth, axis=0)
+    per_state_scale = np.where(per_state_scale > 1e-12, per_state_scale, 1.0)
+    per_state_rmse = np.sqrt(np.mean((truth - prediction) ** 2, axis=0))
+    nrmse = float(np.mean(per_state_rmse / per_state_scale))
+    r2 = float(r2_score(truth, prediction, multioutput="uniform_average"))
+    coefficients = np.asarray(model.coefficients())
+    active_terms = int(np.count_nonzero(np.abs(coefficients) > 1e-12))
+    total_terms = int(coefficients.size)
+
+    # A zero equation is never a useful recommendation, even when a nearly
+    # stationary validation tail makes its raw error look deceptively small.
+    zero_penalty = 1.0 if active_terms == 0 else 0.0
+    terms_per_state = active_terms / max(1, truth.shape[1])
+    balanced_score = nrmse + 0.015 * terms_per_state + zero_penalty
+    return {
+        "library": kind,
+        "degree": int(degree),
+        "threshold": float(threshold),
+        "val_nrmse": nrmse,
+        "val_r2": r2,
+        "active_terms": active_terms,
+        "total_terms": total_terms,
+        "balanced_score": float(balanced_score),
+    }
+
+
+def scout_hyperparameters(
+    data,
+    libraries=("Polynomial", "Fourier", "Combined"),
+    thresholds=DEFAULT_THRESHOLDS,
+    train_fraction=0.7,
+):
+    """Evaluate a compact SINDy search and return three starting profiles.
+
+    ``data`` may be one DataFrame or multiple trajectories. Each trajectory
+    is differentiated and split independently, so time resets never create
+    artificial derivative seams.
+    """
+    frames = [data] if isinstance(data, pd.DataFrame) else list(data)
+    if not frames:
+        raise ValueError("At least one trajectory is required.")
+    state_names = list(frames[0].columns[1:])
+    for frame in frames:
+        if list(frame.columns[1:]) != state_names:
+            raise ValueError(
+                "All trajectories must have identical state columns in the same order.")
+
+    prepared = _prepare_blocked_validation(frames, train_fraction)
+    candidates = []
+    failures = []
+    for kind, degree, threshold in _candidate_grid(libraries, thresholds):
+        try:
+            result = _fit_candidate(
+                kind, degree, threshold, prepared, state_names)
+            if np.isfinite(result["val_nrmse"]):
+                candidates.append(result)
+        except Exception as exc:
+            failures.append(f"{kind} d={degree} λ={threshold:g}: {exc}")
+
+    nonzero = [item for item in candidates if item["active_terms"] > 0]
+    selectable = nonzero or candidates
+    if not selectable:
+        detail = failures[0] if failures else "no finite candidate scores"
+        raise ValueError(f"Data Scout could not fit a candidate: {detail}")
+
+    best_fit = min(
+        selectable,
+        key=lambda item: (item["val_nrmse"], item["active_terms"]),
+    )
+    balanced = min(
+        selectable,
+        key=lambda item: (item["balanced_score"], item["active_terms"]),
+    )
+    accuracy_limit = best_fit["val_nrmse"] * 1.15 + 0.01
+    near_best = [
+        item for item in selectable if item["val_nrmse"] <= accuracy_limit
+    ] or [best_fit]
+    simplest = min(
+        near_best,
+        key=lambda item: (
+            item["active_terms"], item["val_nrmse"], item["degree"]),
+    )
+
+    ranked = sorted(selectable, key=lambda item: item["val_nrmse"])
+    distinct_alternatives = [
+        item for item in ranked[1:]
+        if (item["library"], item["degree"])
+        != (ranked[0]["library"], ranked[0]["degree"])
+    ]
+    if not distinct_alternatives:
+        confidence = "Low"
+    else:
+        gap = ((distinct_alternatives[0]["val_nrmse"] - ranked[0]["val_nrmse"])
+               / max(ranked[0]["val_nrmse"], 1e-12))
+        confidence = (
+            "High" if gap >= 0.20 else "Moderate" if gap >= 0.05 else "Low")
+
+    notes = []
+    if prepared["irregular_time"]:
+        notes.append("Time spacing is irregular; local gradients were used.")
+    if prepared["noise_ratio"] >= 0.10:
+        notes.append(
+            "High relative noise: prefer the simpler profile and inspect residuals.")
+    if best_fit["val_nrmse"] >= 0.50 or best_fit["val_r2"] < 0.60:
+        notes.append(
+            "Weak held-out fit: treat every profile as low-confidence and tune manually.")
+    if failures:
+        notes.append(f"{len(failures)} candidate fit(s) were skipped.")
+
+    return {
+        "profiles": {
+            "simplest": simplest,
+            "balanced": balanced,
+            "best_fit": best_fit,
+        },
+        "candidate_count": len(candidates),
+        "failed_count": len(failures),
+        "noise_ratio": prepared["noise_ratio"],
+        "confidence": confidence,
+        "notes": notes,
+    }
+
 
 def analyze_data_linearity(df):
-    """
-    Analyze an uploaded/selected dataset and suggest SINDy hyperparameters.
-
-    Strategy
-    --------
-    1. Estimate dX/dt via Savitzky-Golay smoothing + finite differences
-       (smoothing reduces the amplification of noise inherent to
-       numerical differentiation).
-    2. Fit polynomial regressions of degree 1, 2, and 3 from X -> dX/dt
-       and compare their R² scores. The *smallest* degree that gives a
-       meaningfully better fit than the previous degree is selected —
-       this avoids over-suggesting complexity when a simpler model
-       already explains the dynamics well (Occam's razor).
-    3. Run an FFT-based periodicity check (dominant peak vs mean
-       spectral energy) — currently informational only; see the note
-       in Step 6 for why the library suggestion itself is not directly
-       applied to the UI.
-    4. Estimate the noise floor from the high-frequency tail of the FFT
-       and map it to a suggested sparsity threshold.
-
-    Returns
-    -------
-    tuple(str, int, float, str)
-        (suggested_library, suggested_degree, suggested_threshold, reason_text)
-        reason_text is a human-readable explanation shown in the UI.
-    """
+    """Backward-compatible tuple API using the balanced scout profile."""
     try:
-        t = df.iloc[:, 0].values
-        X = df.iloc[:, 1:].values
-        n_vars = X.shape[1]
-        dt = np.mean(np.diff(t)) if len(t) > 1 else 0.1
-
-        # ── 1. Calculate derivative ──────────────────────────────
-        # Savitzky-Golay smoothing before differentiating: this is
-        # critical because raw finite differences amplify sensor/CSV
-        # noise, which would otherwise bias the linearity test below.
-        dXdt = np.zeros_like(X)
-        window = min(11, len(t) // 10 * 2 + 1)
-        window = max(window, 5)
-        for i in range(n_vars):
-            smoothed = savgol_filter(
-                X[:, i], window_length=window, polyorder=3)
-            dXdt[:, i] = np.gradient(smoothed, dt)
-
-        # ── 2. Compare R² of degree 1, 2, 3 ────────────────────────
-        # Fit an ordinary polynomial regression (not SINDy/STLSQ) purely
-        # as a fast proxy to gauge how nonlinear the system "looks".
-        r2_scores = {}
-        for deg in [1, 2, 3]:
-            poly = PolynomialFeatures(degree=deg, include_bias=True)
-            X_poly = poly.fit_transform(X)
-            lr = LinearRegression(fit_intercept=False).fit(X_poly, dXdt)
-            r2_scores[deg] = r2_score(dXdt, lr.predict(X_poly),
-                                      multioutput='uniform_average')
-
-        r2_linear = r2_scores[1]
-        r2_deg2 = r2_scores[2]
-        r2_deg3 = r2_scores[3]
-
-        # ── 3. Choose minimal degree that satisfies R² ──────────────────
-        # If degree=1 is already sufficient → treat as a linear system.
-        if r2_linear >= 0.85:
-            sug_degree = 1
-        # If degree=2 meaningfully improves over degree=1 → nonlinear (quadratic-ish).
-        elif r2_deg2 - r2_linear >= 0.05:
-            sug_degree = 2
-        # If degree=3 meaningfully improves over degree=2 → higher-order nonlinearity.
-        elif r2_deg3 - r2_deg2 >= 0.05:
-            sug_degree = 3
-        # No degree gives a meaningful improvement → default back to linear
-        # (a weakly-nonlinear system may simply be indistinguishable from
-        # noise at this sampling rate/noise level).
-        else:
-            sug_degree = 1
-
-        # ── 4. FFT — detect periodicity ──────────────────────────────
-        # A single dominant peak that is >5x the mean spectral amplitude
-        # indicates a strongly oscillatory/periodic signal.
-        is_periodic = False
-        for i in range(n_vars):
-            # remove DC offset before FFT
-            signal = X[:, i] - np.mean(X[:, i])
-            fft_vals = np.abs(np.fft.rfft(signal))
-            peaks = fft_vals[1:]  # skip the DC bin
-            if len(peaks) > 0:
-                if np.max(peaks) > 5 * np.mean(peaks):
-                    is_periodic = True
-                    break
-
-        # ── 5. Noise estimate → suggest threshold ────────────────────
-        # Approximate the noise floor as the median amplitude of the
-        # top 20% highest frequencies (where genuine physical signal
-        # content is usually negligible for smooth trajectories).
-        noise_estimates = []
-        for i in range(n_vars):
-            amp = np.abs(np.fft.rfft(X[:, i])) / len(t)
-            high = np.sort(amp)[-max(1, int(len(amp) * 0.2)):]
-            noise_estimates.append(float(np.median(high)))
-        noise_level = float(np.mean(noise_estimates))
-
-        if noise_level < 0.01:
-            sug_threshold = 0.05
-        elif noise_level < 0.05:
-            sug_threshold = 0.10
-        else:
-            sug_threshold = 0.20
-
-        # ── 6. Library suggestion (informational only — NOT applied to UI) ──
-        # NOTE: Earlier testing (see project history) showed that Fourier/
-        # Combined suggestions frequently misfire on purely polynomial
-        # systems that merely *look* oscillatory (e.g. coupled spring-mass),
-        # because the peak-ratio heuristic can't distinguish "oscillatory
-        # data" from "equations that actually contain sin/cos terms".
-        # We therefore compute sug_library for display/reasoning purposes
-        # only; apply_suggestion() in train_tab.py deliberately does NOT
-        # set library_select.value from this result. Only degree and
-        # threshold are auto-applied.
-        if is_periodic and r2_linear < 0.92:
-            sug_library = "Combined"
-        elif is_periodic and r2_linear >= 0.92:
-            sug_library = "Fourier"
-        else:
-            sug_library = "Polynomial"
-
-        reason = f"Degree: {sug_degree}; Threshold: {sug_threshold}; Noise ≈ {noise_level:.4f}."
-        return sug_library, sug_degree, sug_threshold, reason
-
-    except Exception as e:
-        # Fail-safe defaults so a bad/edge-case CSV never blocks the user
-        # from proceeding to manual configuration.
-        return "Polynomial", 1, 0.10, f"Error analyzing data: {e}"
+        report = scout_hyperparameters(df)
+        choice = report["profiles"]["balanced"]
+        reason = (
+            f"{report['confidence']} confidence; "
+            f"{choice['library']}, degree/harmonics {choice['degree']}, "
+            f"threshold {choice['threshold']:.3f}; "
+            f"blocked-validation NRMSE {choice['val_nrmse']:.3f}; "
+            f"{choice['active_terms']} active terms; "
+            f"relative noise {report['noise_ratio']:.3f}."
+        )
+        return (
+            choice["library"],
+            choice["degree"],
+            choice["threshold"],
+            reason,
+        )
+    except Exception as exc:
+        return "Polynomial", 1, 0.10, f"Error analyzing data: {exc}"

@@ -45,10 +45,20 @@ Whether you are studying coupled oscillators, chaotic attractors, or your own cu
 - Delete runs you no longer need
 
 ### 🤖 Data Scouting Framework
-Before you train, the module analyzes your data and automatically recommends:
-- The right **library type** (via FFT-based periodicity detection)
-- The optimal **polynomial degree** (via R² comparison at degrees 1, 2, 3)
-- A data-driven **sparsity threshold** (via high-frequency noise floor estimation)
+Before training, the module runs a compact search of real SINDy fits and
+recommends three transparent starting profiles:
+
+- **Simplest** — fewest active terms while remaining close to the best error
+- **Balanced** — trades blocked-validation error against equation complexity
+- **Best derivative fit** — lowest held-out derivative NRMSE
+
+Candidate libraries, degrees/harmonics, and thresholds are evaluated on a
+chronological validation block rather than the same samples used for fitting.
+For multi-file uploads, every trajectory is differentiated and split
+independently, so time resets never create artificial seams. A robust,
+dimensionless smoothing-residual estimate reports the relative noise level.
+The Balanced profile is applied initially; users can switch profiles or edit
+any recommended control.
 
 No language model. No API calls. Pure signal processing — fast and fully offline.
 

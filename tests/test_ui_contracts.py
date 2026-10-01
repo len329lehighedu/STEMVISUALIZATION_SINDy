@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 import pandas as pd
 from bokeh.models import (Button, CheckboxButtonGroup, DataTable, Div, Plot,
-                          Slider)
+                          Select, Slider)
 
 from engine.sindy_model import SINDyEngine
 from tabs.ensemble_tab import (ensemble_tab_layout, _ensemble_label,
@@ -15,6 +15,23 @@ from tabs.train_tab import train_tab_layout, _compact_trajectory_label
 
 
 class UIContractTests(unittest.TestCase):
+    def test_data_scout_exposes_three_profiles_and_applies_balanced(self):
+        layout = train_tab_layout(SINDyEngine(), {})
+        profile = next(
+            select for select in layout.select({"type": Select})
+            if select.title == "DATA SCOUT PROFILE"
+        )
+        self.assertTrue(profile.visible)
+        self.assertEqual(profile.value, "balanced")
+        self.assertEqual(
+            [value for value, _ in profile.options],
+            ["balanced", "simplest", "best_fit"],
+        )
+        self.assertTrue(any(
+            "Data Scout" in div.text
+            for div in layout.select({"type": Div})
+        ))
+
     def test_predict_uses_primary_ic_from_multi_trajectory_run(self):
         saved = {"initial_conditions": [[1.0, 2.0], [3.0, 4.0]]}
         self.assertEqual(_default_initial_condition(saved, 2), [1.0, 2.0])
